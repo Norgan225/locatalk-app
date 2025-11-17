@@ -1,0 +1,296 @@
+/* ========================================
+   🔗 APERÇUS DE LIENS ENRICHIS
+   ======================================== */
+
+/* Aperçu dans le message */
+.link-preview {
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 12px;
+    overflow: hidden;
+    margin-top: 8px;
+    max-width: 400px;
+    position: relative;
+    transition: all 0.2s ease;
+}
+
+.link-preview:hover {
+    background: rgba(255, 255, 255, 0.08);
+    border-color: rgba(251, 187, 42, 0.3);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+.link-preview-image {
+    width: 100%;
+    height: 200px;
+    overflow: hidden;
+    background: rgba(0, 0, 0, 0.2);
+}
+
+.link-preview-image img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.link-preview-video {
+    width: 100%;
+    height: 250px;
+    background: #000;
+}
+
+.link-preview-video iframe {
+    width: 100%;
+    height: 100%;
+}
+
+.link-preview-content {
+    padding: 12px;
+    display: flex;
+    gap: 10px;
+}
+
+.link-preview-favicon {
+    width: 16px;
+    height: 16px;
+    flex-shrink: 0;
+    margin-top: 2px;
+}
+
+.link-preview-text {
+    flex: 1;
+    min-width: 0;
+}
+
+.link-preview-title {
+    color: white;
+    font-weight: 600;
+    font-size: 15px;
+    margin-bottom: 4px;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.link-preview-description {
+    color: rgba(255, 255, 255, 0.6);
+    font-size: 13px;
+    line-height: 1.4;
+    margin-bottom: 6px;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.link-preview-url {
+    color: rgba(251, 187, 42, 0.8);
+    font-size: 12px;
+    text-transform: lowercase;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.link-preview-url::before {
+    content: '🔗';
+    font-size: 10px;
+}
+
+.link-preview-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 1;
+}
+
+/* Aperçu mini dans l'input */
+#linkPreviewArea {
+    margin-bottom: 12px;
+}
+
+.link-preview-mini {
+    background: rgba(251, 187, 42, 0.1);
+    border: 1px solid rgba(251, 187, 42, 0.3);
+    border-radius: 8px;
+    padding: 8px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 8px;
+    position: relative;
+    transition: all 0.2s ease;
+}
+
+.link-preview-mini:hover {
+    background: rgba(251, 187, 42, 0.15);
+}
+
+.link-preview-mini-image {
+    width: 48px;
+    height: 48px;
+    border-radius: 6px;
+    object-fit: cover;
+    flex-shrink: 0;
+}
+
+.link-preview-mini-placeholder {
+    width: 48px;
+    height: 48px;
+    border-radius: 6px;
+    background: rgba(255, 255, 255, 0.1);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 24px;
+    flex-shrink: 0;
+}
+
+.link-preview-mini-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.link-preview-mini-title {
+    color: white;
+    font-weight: 600;
+    font-size: 13px;
+    margin-bottom: 2px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.link-preview-mini-url {
+    color: rgba(255, 255, 255, 0.5);
+    font-size: 11px;
+}
+
+.link-preview-remove {
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    background: rgba(239, 68, 68, 0.9);
+    color: white;
+    border: none;
+    border-radius: 50%;
+    width: 20px;
+    height: 20px;
+    cursor: pointer;
+    font-size: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+}
+
+.link-preview-remove:hover {
+    background: #ef4444;
+    transform: scale(1.1);
+}
+
+/* État de chargement */
+.link-preview-loading {
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 8px;
+    padding: 12px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 8px;
+}
+
+.link-preview-loading-spinner {
+    width: 24px;
+    height: 24px;
+    border: 2px solid rgba(251, 187, 42, 0.2);
+    border-top-color: #fbbb2a;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+}
+
+.link-preview-loading-text {
+    color: rgba(255, 255, 255, 0.6);
+    font-size: 13px;
+}
+
+/* Types de liens spéciaux */
+.link-preview[data-type="video"] .link-preview-title::before {
+    content: '▶️ ';
+}
+
+.link-preview[data-type="article"] .link-preview-title::before {
+    content: '📄 ';
+}
+
+.link-preview[data-type="music"] .link-preview-title::before {
+    content: '🎵 ';
+}
+
+/* Plateformes populaires */
+.link-preview[data-domain*="youtube.com"] .link-preview-content,
+.link-preview[data-domain*="youtu.be"] .link-preview-content {
+    border-left: 3px solid #ff0000;
+}
+
+.link-preview[data-domain*="twitter.com"] .link-preview-content,
+.link-preview[data-domain*="x.com"] .link-preview-content {
+    border-left: 3px solid #1da1f2;
+}
+
+.link-preview[data-domain*="github.com"] .link-preview-content {
+    border-left: 3px solid #333;
+}
+
+.link-preview[data-domain*="spotify.com"] .link-preview-content {
+    border-left: 3px solid #1db954;
+}
+
+/* Animation d'apparition */
+@keyframes linkPreviewFadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.link-preview {
+    animation: linkPreviewFadeIn 0.3s ease;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .link-preview {
+        max-width: 100%;
+    }
+
+    .link-preview-image {
+        height: 150px;
+    }
+
+    .link-preview-video {
+        height: 180px;
+    }
+}
+
+/* Mode sombre amélioré */
+@media (prefers-color-scheme: dark) {
+    .link-preview {
+        background: rgba(0, 0, 0, 0.3);
+    }
+
+    .link-preview:hover {
+        background: rgba(0, 0, 0, 0.4);
+    }
+}

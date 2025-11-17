@@ -1,0 +1,37 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Styles pour les messages vocaux */
+.voice-message .audio-player-wrapper {
+    @apply flex items-center gap-3 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800;
+}
+
+.voice-message .audio-icon {
+    @apply text-2xl;
+}
+
+.voice-message .audio-info {
+    @apply flex-1 min-w-0;
+}
+
+.voice-message .audio-title {
+    @apply text-sm font-medium text-gray-900 dark:text-gray-100;
+}
+
+.voice-message .audio-duration {
+    @apply text-xs text-gray-500 dark:text-gray-400;
+}
+
+.voice-message .audio-player {
+    @apply w-full max-w-xs;
+}
+
+.voice-message .audio-player::-webkit-media-controls-panel {
+    @apply bg-blue-50 dark:bg-blue-900/20;
+}
+
+.voice-message .audio-player::-webkit-media-controls-current-time-display,
+.voice-message .audio-player::-webkit-media-controls-time-remaining-display {
+    @apply text-gray-700 dark:text-gray-300;
+}

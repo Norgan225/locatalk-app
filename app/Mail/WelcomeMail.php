@@ -1,0 +1,61 @@
+<?php
+
+namespace App\Mail;
+
+use App\Models\User;
+use App\Models\Organization;
+use Illuminate\Bus\Queueable;
+use Illuminate\Contracts\Queue\ShouldQueue;
+use Illuminate\Mail\Mailable;
+use Illuminate\Mail\Mailables\Content;
+use Illuminate\Mail\Mailables\Envelope;
+use Illuminate\Queue\SerializesModels;
+
+class WelcomeMail extends Mailable implements ShouldQueue
+{
+    use Queueable, SerializesModels;
+
+    public $user;
+    public $organization;
+    public $temporaryPassword;
+
+    /**
+     * Create a new message instance.
+     */
+    public function __construct(User $user, Organization $organization, $temporaryPassword = null)
+    {
+        $this->user = $user;
+        $this->organization = $organization;
+        $this->temporaryPassword = $temporaryPassword;
+    }
+
+    /**
+     * Get the message envelope.
+     */
+    public function envelope(): Envelope
+    {
+        return new Envelope(
+            subject: 'Bienvenue sur LocaTalk - Votre compte a été créé',
+        );
+    }
+
+    /**
+     * Get the message content definition.
+     */
+    public function content(): Content
+    {
+        return new Content(
+            view: 'emails.welcome',
+        );
+    }
+
+    /**
+     * Get the attachments for the message.
+     *
+     * @return array<int, \Illuminate\Mail\Mailables\Attachment>
+     */
+    public function attachments(): array
+    {
+        return [];
+    }
+}
