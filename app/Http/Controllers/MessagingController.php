@@ -71,6 +71,7 @@ class MessagingController extends Controller
                     'user_name' => $otherUser->name,
                     'user_avatar' => $otherUser->avatar,
                     'user_status' => $userStatus,
+                    'is_channel' => false, // Conversation directe avec un utilisateur
                     'last_message' => [
                                 'id' => $lastMessage->id,
                                 'content' => $lastMessage->is_encrypted
@@ -328,7 +329,7 @@ class MessagingController extends Controller
             $message->load(['reactions.user']);
 
             // Broadcast le changement (avec objet message enrichi)
-            broadcast(new \App\Events\MessageReactionChanged($message))->toOthers();
+            \App\Events\MessageReactionChanged::dispatch($message);
 
             // Construire la même forme que getConversation (emoji => {count, users: [...]})
             $reactions = $message->reactions->groupBy('emoji')->map(function($reactionsGroup) {
@@ -808,7 +809,7 @@ private function optimizeAudioWithFFmpeg($file): ?array
             }, 0);
         } catch (\Exception $e) {
             // En cas d'erreur, ne pas bloquer la recherche
-            \Log::warning('Erreur calcul total_occurrences: ' . $e->getMessage());
+            \Illuminate\Support\Facades\Log::warning('Erreur calcul total_occurrences: ' . $e->getMessage());
             $totalOccurrences = array_sum($results->pluck('match_count')->toArray());
         }
 
@@ -977,8 +978,58 @@ private function optimizeAudioWithFFmpeg($file): ?array
             return (int) ceil($estimatedMinutes * 60);
 
         } catch (\Exception $e) {
-            \Log::warning('Erreur extraction durée média: ' . $e->getMessage());
+            \Illuminate\Support\Facades\Log::warning('Erreur extraction durée média: ' . $e->getMessage());
             return null;
         }
+    }
+
+    /**
+     * Publier sa clé publique pour l'échange E2E
+     *
+     * POST /api/messaging/publish-public-key
+     */
+    public function publishPublicKey(Request $request)
+    {
+        $validator = Validator::make($request->all(), [
+            'public_key' => 'required|string',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json(['errors' => $validator->errors()], 422);
+        }
+
+        $user = $request->user();
+
+        // Sauvegarder ou mettre à jour la clé publique de l'utilisateur
+        $user->public_key = $request->public_key;
+        $user->save();
+
+        // Broadcast l'événement de nouvelle clé publique
+        broadcast(new \App\Events\PublicKeyShared($user->id, $request->public_key))->toOthers();
+
+        return response()->json([
+            'message' => 'Clé publique publiée',
+        ]);
+    }
+
+    /**
+     * Récupérer la clé publique d'un utilisateur
+     *
+     * GET /api/messaging/public-key/{userId}
+     */
+    public function getPublicKey(Request $request, int $userId)
+    {
+        $user = User::findOrFail($userId);
+
+        if (!$user->public_key) {
+            return response()->json([
+                'message' => 'Clé publique non disponible',
+            ], 404);
+        }
+
+        return response()->json([
+            'user_id' => $user->id,
+            'public_key' => $user->public_key,
+        ]);
     }
 }

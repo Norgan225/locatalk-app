@@ -230,6 +230,9 @@ class MessageController extends Controller
 
         $message = Message::create($data);
 
+        // Dispatch broadcast event for real-time messaging
+        \App\Events\MessageSent::dispatch($message);
+
         // Log activity
         $recipient = $request->channel_id
             ? "canal #{$request->channel_id}"

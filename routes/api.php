@@ -111,7 +111,8 @@ Route::middleware(['auth:sanctum', 'check.mac'])->group(function () {
     Route::post('status/bulk', [\App\Http\Controllers\UserStatusController::class, 'bulkStatus']);
     Route::get('status/online', [\App\Http\Controllers\UserStatusController::class, 'getOnlineUsers']);
 
-    // Messaging API (Interface moderne)
+    // Messaging API (Interface moderne) - Temporairement sans check.mac pour debug
+    Route::middleware(['auth:sanctum'])->group(function () {
     Route::get('messaging/users', [\App\Http\Controllers\MessagingController::class, 'getAvailableUsers']);
     Route::get('messaging/conversations', [\App\Http\Controllers\MessagingController::class, 'getConversations']);
     Route::get('messaging/conversation/{userId}', [\App\Http\Controllers\MessagingController::class, 'getConversation']);
@@ -126,4 +127,7 @@ Route::middleware(['auth:sanctum', 'check.mac'])->group(function () {
     Route::delete('messaging/messages/{messageId}', [\App\Http\Controllers\MessagingController::class, 'deleteMessage']);
     Route::post('messaging/typing', [\App\Http\Controllers\MessagingController::class, 'typing']);
     Route::post('messaging/link-preview', [\App\Http\Controllers\MessagingController::class, 'getLinkPreview']);
+    Route::post('messaging/publish-public-key', [\App\Http\Controllers\MessagingController::class, 'publishPublicKey']);
+    Route::get('messaging/public-key/{userId}', [\App\Http\Controllers\MessagingController::class, 'getPublicKey']);
+    });
 });

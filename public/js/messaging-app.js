@@ -3,6 +3,8 @@
  * Interface temps réel avec WebSocket et E2E encryption
  */
 
+console.log('📦 Chargement du script messaging-app.js');
+
 class MessagingApp {
     constructor(userId, userName, authToken) {
         console.log('📦 MessagingApp constructor appelé', { userId, userName });
@@ -18,6 +20,9 @@ class MessagingApp {
         this.replyTo = null;
         this.selectedFiles = [];
         this.voiceRecorder = null;
+
+        // Service de chiffrement E2E
+        this.e2eService = null;
 
         // Cache pour éviter les changements de statut trop fréquents
         this.statusCache = new Map(); // userId -> {status, timestamp}
@@ -39,6 +44,13 @@ class MessagingApp {
         this.setupWebSocket();
         this.autoExpandTextarea();
 
+        // Ouvrir la sidebar par défaut sur mobile
+        if (document.body.classList.contains('is-mobile')) {
+            setTimeout(() => {
+                this.toggleSidebar();
+            }, 500);
+        }
+
         // Initialiser le voice recorder
         if (typeof VoiceRecorder !== 'undefined') {
             this.voiceRecorder = new VoiceRecorder(this);
@@ -46,11 +58,186 @@ class MessagingApp {
             window.voiceRecorder = this.voiceRecorder;
         }
 
+        // Initialiser le service de chiffrement E2E
+        if (typeof E2EEncryptionService !== 'undefined') {
+            this.e2eService = new E2EEncryptionService();
+            this.initializeE2E();
+        }
+
         // Polling pour actualiser les messages en temps réel
         this.startPolling();
 
         // Initialiser l'état du bouton d'envoi
         this.updateSendButtonState();
+    }
+
+    /**
+     * Initialiser le chiffrement E2E
+     */
+    async initializeE2E() {
+        if (!this.e2eService) return;
+
+        try {
+            console.log('🔐 Initialisation du chiffrement E2E...');
+            await this.e2eService.initialize();
+
+            // Charger les clés publiques des utilisateurs existants
+            await this.loadExistingPublicKeys();
+
+            // Publier sa clé publique
+            await this.publishPublicKey();
+
+            // Écouter les événements de nouveaux messages pour les déchiffrer
+            if (window.Echo) {
+                window.Echo.private(`user.${this.userId}`)
+                    .listen('.message.sent', async (event) => {
+                        console.log('📨 Message E2E reçu:', event);
+                        await this.handleEncryptedMessage(event);
+                    })
+                    .listen('.public.key.shared', async (event) => {
+                        console.log('🔑 Clé publique reçue:', event);
+                        await this.handlePublicKeyExchange(event);
+                    });
+            }
+
+            console.log('✅ Chiffrement E2E initialisé');
+        } catch (error) {
+            console.error('❌ Erreur lors de l\'initialisation E2E:', error);
+            this.showNotification('Erreur d\'initialisation du chiffrement', 'error');
+        }
+    }
+
+    /**
+     * Charger les clés publiques des utilisateurs existants
+     */
+    async loadExistingPublicKeys() {
+        if (!this.e2eService) return;
+
+        try {
+            console.log('🔑 Chargement des clés publiques existantes...');
+
+            // Récupérer la liste des utilisateurs
+            const response = await fetch('/api/messaging/users', this._fetchOptions('GET'));
+            if (!response.ok) return;
+
+            const data = await response.json();
+            const users = data.users || [];
+
+            // Charger les clés publiques de chaque utilisateur
+            for (const user of users) {
+                if (user.id !== this.userId) {
+                    try {
+                        const keyResponse = await fetch(`/api/messaging/public-key/${user.id}`, this._fetchOptions('GET'));
+                        if (keyResponse.ok) {
+                            const keyData = await keyResponse.json();
+                            if (keyData.public_key) {
+                                await this.e2eService.generateSharedSecret(user.id, keyData.public_key);
+                                console.log(`✅ Clé chargée pour l'utilisateur ${user.id}`);
+                            }
+                        }
+                    } catch (error) {
+                        console.warn(`⚠️ Impossible de charger la clé pour l'utilisateur ${user.id}:`, error);
+                    }
+                }
+            }
+
+            console.log('✅ Clés publiques chargées');
+        } catch (error) {
+            console.error('❌ Erreur chargement clés publiques:', error);
+        }
+    }
+
+    /**
+     * Gérer un message chiffré reçu
+     */
+    async handleEncryptedMessage(event) {
+        try {
+            let messageData = event;
+
+            // Si le message est chiffré, le déchiffrer
+            if (messageData.is_encrypted && messageData.content) {
+                console.log('🔓 Déchiffrement du message E2E...');
+
+                try {
+                    // Parser les données chiffrées
+                    const encryptedData = typeof messageData.content === 'string' ?
+                        JSON.parse(messageData.content) : messageData.content;
+
+                    // Déchiffrer le message avec le service E2E
+                    const decryptedContent = await this.e2eService.decryptMessage(encryptedData, messageData.sender_id);
+                    messageData.content = decryptedContent;
+                    messageData.is_encrypted = false;
+
+                    console.log('✅ Message déchiffré');
+                } catch (decryptError) {
+                    console.error('❌ Erreur lors du déchiffrement:', decryptError);
+                    // Garder le message chiffré avec une indication
+                    messageData.content = '🔒 Message chiffré (impossible à déchiffrer)';
+                }
+            }
+
+            // Traiter le message comme un message normal
+            this.handleIncomingMessage(messageData);
+        } catch (error) {
+            console.error('❌ Erreur lors du déchiffrement:', error);
+            // Afficher le message avec une indication qu'il est chiffré
+            event.content = '🔒 Message chiffré (impossible à déchiffrer)';
+            this.handleIncomingMessage(event);
+        }
+    }
+
+    /**
+     * Publier sa clé publique pour l'échange E2E
+     */
+    async publishPublicKey() {
+        if (!this.e2eService) return;
+
+        try {
+            const publicKey = this.e2eService.getPublicKey();
+            if (!publicKey) return;
+
+            console.log('📤 Publication de la clé publique...');
+
+            const response = await fetch('/api/messaging/publish-public-key', {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${this.authToken}`,
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json'
+                },
+                body: JSON.stringify({
+                    public_key: publicKey
+                })
+            });
+
+            if (response.ok) {
+                console.log('✅ Clé publique publiée');
+            } else {
+                console.warn('⚠️ Impossible de publier la clé publique');
+            }
+        } catch (error) {
+            console.error('❌ Erreur publication clé publique:', error);
+        }
+    }
+
+    /**
+     * Gérer l'échange de clé publique avec un autre utilisateur
+     */
+    async handlePublicKeyExchange(event) {
+        if (!this.e2eService) return;
+
+        try {
+            const { user_id, public_key } = event;
+
+            console.log(`🔄 Échange de clé avec l'utilisateur ${user_id}`);
+
+            // Générer le secret partagé avec cette clé publique
+            await this.e2eService.generateSharedSecret(user_id, public_key);
+
+            console.log(`✅ Secret partagé généré avec l'utilisateur ${user_id}`);
+        } catch (error) {
+            console.error('❌ Erreur échange de clé publique:', error);
+        }
     }
 
     _fetchOptions(method = 'GET', body = null) {
@@ -240,17 +427,19 @@ class MessagingApp {
      * Démarrer le polling pour les nouveaux messages
      */
     startPolling() {
-        // Vérifier les nouveaux messages toutes les 3 secondes
-        setInterval(() => {
-            if (this.currentConversation && this.currentConversation.id) {
-                this.refreshMessages();
-            }
-        }, 3000);
+        console.log('🔄 Démarrage du polling temps réel...');
 
-        // Rafraîchir la liste des conversations toutes les 10 secondes pour mettre à jour les statuts
-        setInterval(() => {
-            this.refreshConversationStatuses();
-        }, 10000);
+        // Polling pour rafraîchir les messages de la conversation actuelle
+        this.messagePollingInterval = setInterval(() => {
+            this.refreshMessages();
+        }, 3000); // Toutes les 3 secondes
+
+        // Polling pour rafraîchir la liste des conversations (nouveaux messages non lus)
+        this.conversationPollingInterval = setInterval(() => {
+            this.refreshConversations();
+        }, 10000); // Toutes les 10 secondes
+
+        console.log('✅ Polling démarré');
     }
 
     /**
@@ -344,13 +533,360 @@ class MessagingApp {
             const currentCount = this.messages[this.currentConversation.id]?.length || 0;
             if (newMessages.length > currentCount) {
                 // Nouveaux messages détectés
+                const previousMessages = this.messages[this.currentConversation.id] || [];
                 this.messages[this.currentConversation.id] = newMessages;
                 this.renderMessages();
                 this.scrollToBottom();
-                console.log('🔄 Nouveaux messages reçus:', newMessages.length - currentCount);
+
+                // Notifier les nouveaux messages
+                const newMessageCount = newMessages.length - currentCount;
+                const latestMessages = newMessages.slice(-newMessageCount);
+
+                latestMessages.forEach(msg => {
+                    this.notifyNewMessage(msg, this.currentConversation.id);
+                });
+
+                console.log('🔄 Nouveaux messages reçus:', newMessageCount);
             }
         } catch (error) {
             // Ignorer les erreurs de polling
+        }
+    }
+
+    /**
+     * Démarrer le polling pour la synchronisation temps réel
+     */
+    startPolling() {
+        console.log('🔄 Démarrage du polling temps réel...');
+
+        // Polling pour rafraîchir les messages de la conversation actuelle
+        this.messagePollingInterval = setInterval(() => {
+            this.refreshMessages();
+        }, 3000); // Toutes les 3 secondes
+
+        // Polling pour rafraîchir la liste des conversations (nouveaux messages non lus)
+        this.conversationPollingInterval = setInterval(() => {
+            this.refreshConversations();
+        }, 10000); // Toutes les 10 secondes
+
+        console.log('✅ Polling démarré');
+    }
+
+    /**
+     * Arrêter le polling
+     */
+    stopPolling() {
+        if (this.messagePollingInterval) {
+            clearInterval(this.messagePollingInterval);
+            this.messagePollingInterval = null;
+        }
+        if (this.conversationPollingInterval) {
+            clearInterval(this.conversationPollingInterval);
+            this.conversationPollingInterval = null;
+        }
+        console.log('🛑 Polling arrêté');
+    }
+
+    /**
+     * Rafraîchir la liste des conversations (pour les nouveaux messages)
+     */
+    async refreshConversations() {
+        try {
+            const response = await fetch('/api/messaging/conversations', this._fetchOptions('GET'));
+            if (!response.ok) return;
+
+            const data = await response.json();
+            const newConversations = data.conversations || [];
+
+            // Vérifier s'il y a de nouveaux messages non lus
+            let hasNewMessages = false;
+            newConversations.forEach(newConv => {
+                const existingConv = this.conversations.find(c => c.user_id === newConv.user_id);
+                if (existingConv && newConv.unread_count > existingConv.unread_count) {
+                    hasNewMessages = true;
+                }
+            });
+
+            // Mettre à jour la liste si nécessaire
+            if (hasNewMessages) {
+                this.conversations = newConversations;
+                this.renderConversations();
+                console.log('🔄 Conversations mises à jour avec nouveaux messages');
+            }
+        } catch (error) {
+            console.error('❌ Erreur refreshConversations:', error);
+        }
+    }
+
+    /**
+     * Charger toutes les conversations
+     */
+    async loadConversations() {
+        console.log('🔄 Chargement des conversations...');
+
+        // Afficher le spinner pendant le chargement
+        const list = document.getElementById('conversationsList');
+        if (list) {
+            list.innerHTML = '<div class="loading-state"><div class="spinner"></div><p>Chargement des conversations...</p></div>';
+        }
+
+        try {
+            const response = await fetch('/api/messaging/conversations', this._fetchOptions('GET'));
+
+            console.log('📡 Réponse API:', response.status, response.ok);
+
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({}));
+                console.error('❌ Erreur API:', errorData);
+                throw new Error('Erreur de chargement des conversations');
+            }
+
+            const data = await response.json();
+            console.log('✅ Données reçues:', data);
+            this.conversations = data.conversations || [];
+            console.log('📋 Conversations:', this.conversations.length);
+
+            // Rendre les conversations
+            this.renderConversations();
+
+        } catch (error) {
+            console.error('❌ Erreur loadConversations:', error);
+            if (list) {
+                list.innerHTML = '<div class="error-state"><p>Erreur de chargement des conversations</p><button onclick="messagingApp.loadConversations()">Réessayer</button></div>';
+            }
+        }
+    }
+
+    /**
+     * Rendre la liste des conversations
+     */
+    renderConversations() {
+        const list = document.getElementById('conversationsList');
+        if (!list) return;
+
+        if (this.conversations.length === 0) {
+            list.innerHTML = '<div class="empty-state"><p>Aucune conversation</p><p>Commencez par envoyer un message !</p></div>';
+            return;
+        }
+
+        // Vider la liste avec animation
+        if (window.animationManager) {
+            window.animationManager.animateOut(list.firstChild, () => {
+                list.innerHTML = '';
+                this.renderConversationItems(list);
+            });
+        } else {
+            list.innerHTML = '';
+            this.renderConversationItems(list);
+        }
+    }
+
+    /**
+     * Rendre les éléments de conversation avec animations
+     */
+    renderConversationItems(list) {
+        this.conversations.forEach((conv, index) => {
+            const item = document.createElement('div');
+            item.className = `conversation-item ${this.currentConversation && this.currentConversation.id === conv.user_id ? 'active' : ''}`;
+            item.dataset.userId = conv.user_id;
+            item.onclick = () => this.selectConversation(conv.user_id);
+
+            item.innerHTML = `
+                <div class="conversation-avatar">
+                    <img src="${conv.user_avatar || '/images/default-avatar.png'}" alt="${conv.user_name}" onerror="this.src='/images/default-avatar.png'">
+                    <span class="status-badge status-${conv.user_status || 'offline'}"></span>
+                </div>
+                <div class="conversation-info">
+                    <div class="conversation-name">${this.escapeHtml(conv.user_name)}</div>
+                    <div class="conversation-preview">
+                        ${conv.last_message ? this.escapeHtml(this.truncatePreviewText(conv.last_message.content || 'Message', 30)) : 'Nouvelle conversation'}
+                    </div>
+                </div>
+                <div class="conversation-meta">
+                    <div class="conversation-time">
+                        ${conv.last_message ? this.formatTime(conv.last_message.created_at) : ''}
+                    </div>
+                    ${conv.unread_count > 0 ? `<div class="unread-badge">${conv.unread_count}</div>` : ''}
+                </div>
+            `;
+
+            // Animer l'entrée de chaque élément
+            if (window.animationManager) {
+                item.style.opacity = '0';
+                item.dataset.animation = 'slide-in-left';
+                window.animationManager.observe(item, 'slide-in-left');
+
+                // Délai progressif pour un effet cascada
+                setTimeout(() => {
+                    list.appendChild(item);
+                }, index * 50);
+            } else {
+                list.appendChild(item);
+            }
+        });
+
+        console.log('🎨 Conversations rendues avec animations:', this.conversations.length);
+    }
+
+    /**
+     * Rendre la liste des messages
+     */
+    renderMessages() {
+        const container = document.getElementById('messagesList');
+        if (!container) return;
+
+        const conversationId = this.currentConversation?.id;
+        if (!conversationId || !this.messages[conversationId]) {
+            container.innerHTML = '<div class="empty-state"><p>Aucun message</p></div>';
+            return;
+        }
+
+        const messages = this.messages[conversationId];
+
+        // Vider le conteneur avec animation
+        if (window.animationManager) {
+            window.animationManager.animateOut(container.firstChild, () => {
+                container.innerHTML = '';
+                this.renderMessageItems(container, messages);
+            });
+        } else {
+            container.innerHTML = '';
+            this.renderMessageItems(container, messages);
+        }
+    }
+
+    /**
+     * Rendre les éléments de message avec animations
+     */
+    renderMessageItems(container, messages) {
+        let lastDate = null;
+
+        messages.forEach((msg, index) => {
+            // Ajouter un séparateur de date si nécessaire
+            const messageDate = new Date(msg.created_at || msg.timestamp);
+            const dateStr = messageDate.toDateString();
+
+            if (dateStr !== lastDate) {
+                const dateSeparator = document.createElement('div');
+                dateSeparator.className = 'date-separator';
+                dateSeparator.innerHTML = `<span>${this.formatDate(messageDate)}</span>`;
+                dateSeparator.style.opacity = '0';
+                dateSeparator.dataset.animation = 'fade-in';
+
+                if (window.animationManager) {
+                    window.animationManager.observe(dateSeparator, 'fade-in');
+                } else {
+                    dateSeparator.style.opacity = '1';
+                }
+
+                container.appendChild(dateSeparator);
+                lastDate = dateStr;
+            }
+
+            // Créer l'élément de message
+            const messageHtml = this.renderMessage(msg);
+            const messageElement = document.createElement('div');
+            messageElement.innerHTML = messageHtml;
+            const messageBubble = messageElement.firstElementChild;
+
+            // Appliquer les animations
+            if (messageBubble) {
+                messageBubble.style.opacity = '0';
+                messageBubble.dataset.animation = 'slide-in-up';
+                messageBubble.dataset.delay = index * 50; // Délai progressif
+
+                if (window.animationManager) {
+                    window.animationManager.observe(messageBubble, 'slide-in-up');
+                } else {
+                    messageBubble.style.opacity = '1';
+                }
+
+                // Attacher les écouteurs d'événements
+                this.attachMessageListeners(messageBubble);
+            }
+
+            container.appendChild(messageElement);
+        });
+
+        console.log('🎨 Messages rendus avec animations:', messages.length);
+    }
+
+    /**
+     * Configurer WebSocket avec Laravel Echo
+     */
+    setupWebSocket() {
+        console.log('🔌 Configuration WebSocket...');
+
+        // Vérifier si Echo est disponible
+        if (!window.Echo) {
+            console.warn('⚠️ Laravel Echo non disponible, utilisation du polling uniquement');
+            return;
+        }
+
+        try {
+            // Écouter les nouveaux messages
+            window.Echo.private(`user.${this.userId}`)
+                .listen('.message.sent', (event) => {
+                    console.log('📨 Nouveau message reçu via WebSocket:', event);
+
+                    // Rafraîchir les messages si c'est la conversation actuelle
+                    if (this.currentConversation && (
+                        event.sender_id === this.currentConversation.id ||
+                        event.receiver_id === this.currentConversation.id
+                    )) {
+                        this.refreshMessages();
+                    }
+
+                    // Rafraîchir la liste des conversations
+                    this.refreshConversations();
+
+                    // Notifier pour les popups
+                    if (event.sender_id !== this.userId) {
+                        this.notifyNewMessage(event, event.sender_id);
+                    }
+                })
+                .listen('.message.reaction.changed', (event) => {
+                    console.log('😊 Réaction changée:', event);
+                    // Rafraîchir les messages pour mettre à jour les réactions
+                    if (this.currentConversation) {
+                        this.refreshMessages();
+                    }
+                });
+
+            // Écouter les événements de frappe
+            window.Echo.private(`user.${this.userId}`)
+                .listen('.user.typing', (event) => {
+                    console.log('✍️ Utilisateur tape:', event);
+                    this.handleTypingEvent(event);
+                });
+
+            console.log('✅ WebSocket configuré avec succès');
+        } catch (error) {
+            console.error('❌ Erreur configuration WebSocket:', error);
+        }
+    }
+
+    /**
+     * Gérer les événements de frappe reçus
+     */
+    handleTypingEvent(event) {
+        if (!this.currentConversation || event.user_id !== this.currentConversation.id) {
+            return;
+        }
+
+        const indicator = document.getElementById('typingIndicator');
+        if (indicator) {
+            if (event.typing) {
+                indicator.style.display = 'inline';
+                indicator.textContent = 'est en train d\'écrire...';
+
+                // Masquer après 3 secondes
+                setTimeout(() => {
+                    indicator.style.display = 'none';
+                }, 3000);
+            } else {
+                indicator.style.display = 'none';
+            }
         }
     }
 
@@ -459,6 +995,16 @@ class MessagingApp {
         document.getElementById('searchConversations')?.addEventListener('input', (e) => {
             this.filterConversations(e.target.value);
         });
+
+        // Toggle sidebar (mobile) - maintenant rafraîchit la page
+        document.getElementById('toggleSidebarBtn')?.addEventListener('click', () => {
+            window.location.reload();
+        });
+
+        // Bouton retour aux conversations (mobile) - retiré
+
+        // Fermer sidebar mobile en cliquant sur l'overlay
+        document.getElementById('mobileOverlay')?.addEventListener('click', () => this.toggleSidebar());
     }
 
     /**
@@ -541,6 +1087,16 @@ class MessagingApp {
     async selectConversation(userId) {
         console.log('👆 Sélection de la conversation avec user:', userId);
 
+        // Fermer la sidebar mobile si elle est ouverte
+        if (document.body.classList.contains('is-mobile')) {
+            const sidebar = document.querySelector('.conversations-sidebar');
+            const overlay = document.getElementById('mobileOverlay');
+            if (sidebar && overlay) {
+                sidebar.classList.remove('mobile-show');
+                overlay.classList.remove('show');
+            }
+        }
+
         // Fermer/réinitialiser toutes les actions en cours (recherche, épinglés, reply, picker, enregistrement...)
         try {
             // Search & pinned
@@ -579,7 +1135,14 @@ class MessagingApp {
         }
 
         // Définir la conversation courante
-        this.currentConversation = { id: userId };
+        // Chercher la conversation dans la liste pour avoir toutes les propriétés
+        const conversationData = this.conversations.find(c => c.user_id === userId);
+        this.currentConversation = conversationData ? {
+            id: userId,
+            is_channel: conversationData.is_channel || false,
+            user_name: conversationData.user_name,
+            user_avatar: conversationData.user_avatar
+        } : { id: userId, is_channel: false };
 
         // Afficher la zone de chat
         this.showChatArea();
@@ -595,15 +1158,32 @@ class MessagingApp {
      * Mettre à jour l'état actif d'une conversation dans le DOM
      */
     updateConversationActiveState(userId) {
-        // Retirer la classe active de toutes les conversations
-        document.querySelectorAll('.conversation-item').forEach(item => {
-            item.classList.remove('active');
+        // Retirer la classe active de toutes les conversations avec animation
+        document.querySelectorAll('.conversation-item.active').forEach(item => {
+            if (window.animationManager) {
+                window.animationManager.animateOut(item, () => {
+                    item.classList.remove('active');
+                });
+            } else {
+                item.classList.remove('active');
+            }
         });
 
-        // Ajouter la classe active à la conversation sélectionnée
+        // Ajouter la classe active à la conversation sélectionnée avec animation
         const activeItem = document.querySelector(`.conversation-item[data-user-id="${userId}"]`);
         if (activeItem) {
             activeItem.classList.add('active');
+
+            // Animation de sélection
+            if (window.animationManager) {
+                window.animationManager.animateConversationSelect(activeItem);
+            } else {
+                // Animation par défaut
+                activeItem.style.transform = 'scale(1.02)';
+                setTimeout(() => {
+                    activeItem.style.transform = 'scale(1)';
+                }, 200);
+            }
         }
     }
 
@@ -1146,7 +1726,16 @@ class MessagingApp {
      */
     async sendMessage() {
         const textarea = document.getElementById('messageTextarea');
-        const content = textarea?.value.trim();
+        const rawValue = textarea?.value;
+        const content = rawValue?.trim();
+
+        console.log('📤 sendMessage called');
+        console.log('📝 textarea element:', textarea);
+        console.log('📝 textarea value (raw):', rawValue);
+        console.log('📝 content (trimmed):', content);
+        console.log('📝 content length:', content?.length);
+        console.log('📎 selectedFiles:', this.selectedFiles.length);
+        console.log('🎤 voiceRecorder pending:', this.voiceRecorder?.getPendingAudio());
 
         // If a voice recording is currently active (recording or paused), stop it and prepare the blob
         if (this.voiceRecorder && (this.voiceRecorder.isRecording || this.voiceRecorder.isPaused)) {
@@ -1154,7 +1743,13 @@ class MessagingApp {
             await this.voiceRecorder.stopAndGetPendingAudio();
         }
 
-        if (!content && this.selectedFiles.length === 0 && (!this.voiceRecorder || !this.voiceRecorder.getPendingAudio())) return;
+        if (!content && this.selectedFiles.length === 0 && (!this.voiceRecorder || !this.voiceRecorder.getPendingAudio())) {
+            console.log('❌ sendMessage: aucune donnée à envoyer, retour');
+            console.log('   - content:', !!content, 'length:', content?.length);
+            console.log('   - selectedFiles:', this.selectedFiles.length);
+            console.log('   - voice pending:', !!this.voiceRecorder?.getPendingAudio());
+            return;
+        }
         if (!this.currentConversation) {
             this.showNotification('Veuillez sélectionner une conversation', 'error');
             return;
@@ -1188,14 +1783,42 @@ class MessagingApp {
                 }
             }
 
+            // Chiffrer le message si c'est un message direct et que E2E est activé
+            let encryptedContent = content;
+            let encryptionKeyId = null;
+
+            if (this.e2eService && content && !this.currentConversation.is_channel) {
+                try {
+                    console.log('🔐 Chiffrement E2E du message...');
+
+                    // Chiffrer le message pour le destinataire
+                    const encryptedData = await this.e2eService.encryptMessage(content, this.currentConversation.id);
+
+                    // Convertir en format pour l'API
+                    encryptedContent = JSON.stringify(encryptedData);
+                    encryptionKeyId = encryptedData.keyId;
+
+                    console.log('✅ Message chiffré avec la clé:', encryptionKeyId);
+                } catch (error) {
+                    console.warn('⚠️ Échec du chiffrement E2E, envoi en clair:', error.message);
+                    // Ne pas bloquer l'envoi - continuer avec le message en clair
+                    encryptedContent = content;
+                    encryptionKeyId = null;
+                }
+            }
+
             // Envoyer le message
             const messageData = {
                 receiver_id: this.currentConversation.id,
-                content: content || 'Message vocal',
+                content: encryptedContent || content || 'Message vocal',
                 type: messageType,
                 reply_to: this.replyTo,
-                attachment_ids: attachmentIds
+                attachment_ids: attachmentIds,
+                is_encrypted: !!encryptionKeyId,
+                encryption_key_id: encryptionKeyId
             };
+
+            console.log('📤 Envoi du message avec data:', messageData);
 
             const response = await fetch('/api/messaging/send', {
                 method: 'POST',
@@ -1207,9 +1830,11 @@ class MessagingApp {
                 body: JSON.stringify(messageData)
             });
 
+            console.log('📡 Réponse HTTP:', response.status, response.statusText);
+
             if (!response.ok) {
                 const errorText = await response.text();
-                console.error('Send error:', errorText);
+                console.error('❌ Send error:', errorText);
                 throw new Error('Erreur d\'envoi du message');
             }
 
@@ -1308,7 +1933,44 @@ class MessagingApp {
         this.messages[this.currentConversation.id].push(message);
         console.log('📝 Nombre total de messages:', this.messages[this.currentConversation.id].length);
 
-        this.renderMessages();
+        // Ajouter le message avec animation au lieu de re-rendre toute la liste
+        this.addMessageWithAnimation(message);
+    }
+
+    /**
+     * Ajouter un message avec animation
+     */
+    addMessageWithAnimation(message) {
+        const container = document.getElementById('messagesList');
+        if (!container) return;
+
+        // Créer l'élément de message
+        const messageHtml = this.renderMessage(message);
+        const messageElement = document.createElement('div');
+        messageElement.innerHTML = messageHtml;
+        const messageBubble = messageElement.firstElementChild;
+
+        if (messageBubble) {
+            // Appliquer l'animation d'entrée pour les nouveaux messages
+            if (window.animationManager) {
+                window.animationManager.animateMessageIn(messageBubble);
+            } else {
+                messageBubble.style.transition = 'all 0.3s ease-out';
+                messageBubble.style.opacity = '1';
+                messageBubble.style.transform = 'translateY(0)';
+            }
+
+            // Attacher les écouteurs d'événements
+            this.attachMessageListeners(messageBubble);
+
+            // Ajouter au conteneur
+            container.appendChild(messageElement);
+
+            // Défiler vers le bas avec animation
+            this.scrollToBottom();
+        }
+
+        console.log('✨ Nouveau message ajouté avec animation');
     }
 
     /**
@@ -1989,6 +2651,48 @@ class MessagingApp {
         const panel = document.getElementById('pinnedMessagesPanel');
         if (panel) {
             panel.style.display = 'none';
+        }
+    }
+
+    backToConversations() {
+        console.log('⬅️ Retour aux conversations');
+
+        // Désélectionner la conversation actuelle
+        this.currentConversation = null;
+
+        // Cacher le chat header
+        const chatHeader = document.getElementById('chatHeader');
+        if (chatHeader) {
+            chatHeader.style.display = 'none';
+        }
+
+        // Montrer la zone d'accueil
+        const welcomeArea = document.getElementById('welcomeArea');
+        if (welcomeArea) {
+            welcomeArea.style.display = 'flex';
+        }
+
+        // Ouvrir la sidebar avec les conversations
+        this.toggleSidebar();
+    }
+
+    toggleSidebar() {
+        const sidebar = document.querySelector('.conversations-sidebar');
+        const overlay = document.getElementById('mobileOverlay');
+
+        if (sidebar && overlay) {
+            const isVisible = sidebar.classList.contains('mobile-show');
+
+            if (isVisible) {
+                // Fermer la sidebar
+                sidebar.classList.remove('mobile-show');
+                overlay.classList.remove('show');
+            } else {
+                // Ouvrir la sidebar - recharger les conversations pour être sûr
+                this.loadConversations();
+                sidebar.classList.add('mobile-show');
+                overlay.classList.add('show');
+            }
         }
     }
 
@@ -2766,6 +3470,23 @@ class MessagingApp {
     }
 
     /**
+     * Notifier un nouveau message (pour les notifications popup)
+     */
+    notifyNewMessage(message, conversationId) {
+        // Trouver le nom de l'expéditeur
+        const senderName = message.sender?.name || 'Utilisateur';
+
+        // Émettre un événement personnalisé pour les notifications
+        window.dispatchEvent(new CustomEvent('new-message-received', {
+            detail: {
+                message: message,
+                conversationId: conversationId,
+                senderName: senderName
+            }
+        }));
+    }
+
+    /**
      * Tronquer le texte de prévisualisation à une longueur maximale
      */
     truncatePreviewText(text, maxLength = 40) {
@@ -2789,7 +3510,71 @@ class MessagingApp {
 
         return truncatedWords + '...';
     }
+
+    /**
+     * Formater l'heure pour l'affichage
+     */
+    formatTime(dateString) {
+        if (!dateString) return '';
+
+        const date = new Date(dateString);
+        const now = new Date();
+        const diff = now - date;
+
+        // Moins d'une minute
+        if (diff < 60000) return 'à l\'instant';
+
+        // Moins d'une heure
+        if (diff < 3600000) return `${Math.floor(diff / 60000)}min`;
+
+        // Aujourd'hui
+        if (date.toDateString() === now.toDateString()) {
+            return date.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+        }
+
+        // Hier
+        const yesterday = new Date(now);
+        yesterday.setDate(yesterday.getDate() - 1);
+        if (date.toDateString() === yesterday.toDateString()) {
+            return 'hier';
+        }
+
+        // Cette semaine
+        if (diff < 604800000) { // 7 jours
+            const days = ['dim', 'lun', 'mar', 'mer', 'jeu', 'ven', 'sam'];
+            return days[date.getDay()];
+        }
+
+        // Plus ancien
+        return date.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' });
+    }
+
+    /**
+     * Échapper le HTML
+     */
+    escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
 }
 
 // Initialisation globale
-let messagingApp = null;
+if (typeof window !== 'undefined') {
+    // Attendre que le DOM soit chargé
+    document.addEventListener('DOMContentLoaded', () => {
+        console.log('🚀 Initialisation de MessagingApp...');
+
+        // Récupérer les informations utilisateur depuis les meta tags ou les variables globales
+        const userId = window.userId || document.querySelector('meta[name="user-id"]')?.content;
+        const userName = window.userName || document.querySelector('meta[name="user-name"]')?.content;
+        const authToken = window.authToken || document.querySelector('meta[name="auth-token"]')?.content;
+
+        if (userId && userName) {
+            window.messagingApp = new MessagingApp(userId, userName, authToken);
+            console.log('✅ MessagingApp initialisé');
+        } else {
+            console.warn('⚠️ Informations utilisateur non trouvées, MessagingApp non initialisé');
+        }
+    });
+}

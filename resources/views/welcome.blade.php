@@ -598,4 +598,7 @@
 		});
 	});
 </script>
+
+{{-- Gestionnaire de notifications --}}
+<script src="{{ asset('js/notification-manager.js') }}"></script>
 @endpush

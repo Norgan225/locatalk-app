@@ -5,12 +5,32 @@
 
     <!-- Scripts -->
     <script src="{{ asset('js/messaging-app.js') }}?v={{ time() }}&r={{ rand() }}"></script>
+    <script src="{{ asset('js/theme-manager.js') }}?v={{ time() }}&r={{ rand() }}"></script>
+    <script src="{{ asset('js/animation-manager.js') }}?v={{ time() }}&r={{ rand() }}"></script>
+    <script src="{{ asset('js/e2e-encryption.js') }}?v={{ time() }}&r={{ rand() }}"></script>
     <script src="{{ asset('js/voice-recorder.js') }}?v={{ time() }}&r={{ rand() }}"></script>
     <script src="{{ asset('js/link-preview.js') }}?v={{ time() }}&r={{ rand() }}"></script>
     <script src="{{ asset('js/user-presence.js') }}?v={{ time() }}&r={{ rand() }}"></script>
+    <script src="{{ asset('js/sound-manager.js') }}?v={{ time() }}&r={{ rand() }}"></script>
+    <script src="{{ asset('js/notification-manager.js') }}?v={{ time() }}&r={{ rand() }}"></script>
 
     <!-- Configuration Pusher (même si non utilisé, pour compatibilité) -->
     <script>
+        // Détection mobile et ajout de classe
+        function updateMobileClass() {
+            const isMobile = window.innerWidth <= 1024;
+            document.body.classList.toggle('is-mobile', isMobile);
+        }
+
+        // Appliquer au chargement et au redimensionnement
+        updateMobileClass();
+        window.addEventListener('resize', updateMobileClass);
+
+        // Informations utilisateur pour MessagingApp
+        window.userId = {{ auth()->id() }};
+        window.userName = "{{ auth()->user()->name }}";
+        window.authToken = "{{ auth()->user()->createToken('messaging-app')->plainTextToken }}";
+
         window.PUSHER_APP_KEY = "{{ config('broadcasting.connections.pusher.key', '') }}";
         window.PUSHER_CLUSTER = "{{ config('broadcasting.connections.pusher.options.cluster', 'mt1') }}";
         window.LARAVEL_ECHO_AVAILABLE = typeof Echo !== 'undefined';
@@ -23,7 +43,7 @@
                 cluster: window.PUSHER_CLUSTER,
                 forceTLS: false,
                 wsHost: window.location.hostname,
-                wsPort: 6001,
+                wsPort: 8080,
                 disableStats: true,
                 enabledTransports: ['ws', 'wss'],
                 authEndpoint: '/broadcasting/auth',
@@ -39,6 +59,9 @@
     <!-- Header avec info -->
     <div style="margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center;">
         <div style="display: flex; align-items: center; gap: 16px;">
+            <button class="icon-btn mobile-only" id="toggleSidebarBtn" title="Conversations" style="background: rgba(255, 255, 255, 0.1); color: white; border: 1px solid rgba(255, 255, 255, 0.2); padding: 10px; border-radius: 10px;">
+                ☰
+            </button>
             <div>
                 <h1 style="color: white; font-size: 24px; font-weight: 700; margin-bottom: 4px;">
                     💬 Messages
@@ -67,21 +90,78 @@
     </div>
 
     <div class="messaging-app">
+        <!-- Overlay pour mobile -->
+        <div class="mobile-overlay" id="mobileOverlay"></div>
+
         <!-- Liste des conversations -->
         <div class="conversations-sidebar">
             <div class="sidebar-header">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
                     <h2 class="sidebar-title" style="margin: 0;">💬 Messages</h2>
+                    <div id="themeToggleContainer"></div>
+                </div>
+                <div class="notification-container" style="margin-bottom: 16px;">
+                    <button id="notificationToggleBtn" class="notification-toggle" title="Notifications & Sons">
+                        <span class="notification-icon">🔔</span>
+                        <span class="notification-text">Notifications</span>
+                        <span class="notification-status" id="notificationStatus">Désactivé</span>
+                        <span class="notification-arrow">▼</span>
+                    </button>
+
+                            <!-- Menu déroulant des options -->
+                            <div id="notificationMenu" class="notification-menu hidden">
+                                <div class="menu-section">
+                                    <div class="menu-title">Notifications</div>
+                                    <button id="enableNotificationsBtn" class="menu-item">
+                                        <span class="menu-icon">🔔</span>
+                                        <span>Activer les notifications</span>
+                                    </button>
+                                </div>
+
+                                <div class="menu-section">
+                                    <div class="menu-title">Sonneries</div>
+                                    <button class="menu-item sound-option" data-sound="bell">
+                                        <span class="menu-icon">🔔</span>
+                                        <span>Cloche</span>
+                                        <span class="sound-test">▶️</span>
+                                    </button>
+                                    <button class="menu-item sound-option" data-sound="chime">
+                                        <span class="menu-icon">🎵</span>
+                                        <span>Carillon</span>
+                                        <span class="sound-test">▶️</span>
+                                    </button>
+                                    <button class="menu-item sound-option" data-sound="notification">
+                                        <span class="menu-icon">📱</span>
+                                        <span>Moderne</span>
+                                        <span class="sound-test">▶️</span>
+                                    </button>
+                                    <button class="menu-item sound-option" data-sound="gentle">
+                                        <span class="menu-icon">😌</span>
+                                        <span>Doux</span>
+                                        <span class="sound-test">▶️</span>
+                                    </button>
+                                </div>
+
+                                <div class="menu-section">
+                                    <label class="menu-item sound-toggle">
+                                        <input type="checkbox" id="soundEnabledCheckbox">
+                                        <span class="checkmark"></span>
+                                        <span>Activer les sons</span>
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+                    <div class="search-wrapper">
+                        <input type="text"
+                               id="searchConversations"
+                               class="search-box"
+                               placeholder="🔍 Rechercher une conversation...">
+                    </div>
                     <button id="newConversationBtn" class="icon-btn" title="Nouvelle conversation"
                             style="background: linear-gradient(135deg, #fbbb2a, #df5526); border: none; padding: 10px 14px;">
                         ✏️
                     </button>
-                </div>
-                <div class="search-wrapper">
-                    <input type="text"
-                           id="searchConversations"
-                           class="search-box"
-                           placeholder="🔍 Rechercher une conversation...">
                 </div>
             </div>
 
@@ -275,14 +355,25 @@
 
         console.log('👤 User ID:', {{ $user->id }});
 
+        // Initialiser le gestionnaire de thèmes
+        if (typeof ThemeManager !== 'undefined') {
+            window.themeManager = new ThemeManager();
+            window.themeManager.createThemeToggle(document.getElementById('themeToggleContainer'));
+        }
+
+        // Initialiser le gestionnaire d'animations
+        if (typeof AnimationManager !== 'undefined') {
+            window.animationManager = new AnimationManager();
+        }
+
         // Utiliser window pour éviter les conflits de scope
         if (!window.messagingApp) {
             console.log('🆕 Création de messagingApp...');
-            const authToken = '{{ $plainToken }}';
+            const authToken = window.authToken;
 
             window.messagingApp = new MessagingApp(
-                {{ $user->id }},
-                '{{ $user->name }}',
+                {{ auth()->id() }},
+                '{{ auth()->user()->name }}',
                 authToken
             );
             console.log('✅ messagingApp créé:', window.messagingApp);
@@ -421,6 +512,114 @@
                 window.userPresenceManager = new UserPresenceManager();
                 await window.userPresenceManager.init(userId, window.messagingApp.authToken);
                 console.log('✅ Présence utilisateur initialisée');
+            }
+
+            // Initialiser le gestionnaire de notifications
+            if (typeof NotificationManager !== 'undefined') {
+                console.log('🚀 Initialisation du gestionnaire de notifications...');
+                window.notificationManager = new NotificationManager();
+                await window.notificationManager.init();
+                console.log('✅ Gestionnaire de notifications initialisé');
+
+                // Connecter le bouton de notification
+                const notificationBtn = document.getElementById('notificationToggleBtn');
+                const notificationStatus = document.getElementById('notificationStatus');
+                const notificationMenu = document.getElementById('notificationMenu');
+                const notificationArrow = notificationBtn.querySelector('.notification-arrow');
+
+                if (notificationBtn && notificationStatus) {
+                    // Mettre à jour le statut initial
+                    updateNotificationStatus();
+
+                    // Gérer le clic sur le bouton principal
+                    notificationBtn.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        notificationMenu.classList.toggle('hidden');
+                        notificationArrow.style.transform = notificationMenu.classList.contains('hidden') ? 'rotate(0deg)' : 'rotate(180deg)';
+                    });
+
+                    // Fermer le menu quand on clique ailleurs
+                    document.addEventListener('click', (e) => {
+                        if (!notificationBtn.contains(e.target) && !notificationMenu.contains(e.target)) {
+                            notificationMenu.classList.add('hidden');
+                            notificationArrow.style.transform = 'rotate(0deg)';
+                        }
+                    });
+
+                    // Bouton d'activation des notifications
+                    const enableBtn = document.getElementById('enableNotificationsBtn');
+                    if (enableBtn) {
+                        enableBtn.addEventListener('click', async () => {
+                            try {
+                                await window.notificationManager.requestPermission();
+                                updateNotificationStatus();
+                                notificationMenu.classList.add('hidden');
+                                notificationArrow.style.transform = 'rotate(0deg)';
+                            } catch (error) {
+                                console.error('Erreur lors de la demande de permission:', error);
+                            }
+                        });
+                    }
+
+                    // Gestion des sonneries
+                    const soundOptions = document.querySelectorAll('.sound-option');
+                    soundOptions.forEach(option => {
+                        option.addEventListener('click', (e) => {
+                            if (e.target.classList.contains('sound-test')) {
+                                // Tester le son
+                                const soundName = option.dataset.sound;
+                                window.notificationManager.testSound(soundName);
+                            } else {
+                                // Changer le son actif
+                                const soundName = option.dataset.sound;
+                                window.notificationManager.setSound(soundName);
+
+                                // Mettre à jour l'affichage
+                                soundOptions.forEach(opt => opt.classList.remove('active'));
+                                option.classList.add('active');
+                            }
+                        });
+                    });
+
+                    // Activer/désactiver les sons
+                    const soundCheckbox = document.getElementById('soundEnabledCheckbox');
+                    if (soundCheckbox) {
+                        soundCheckbox.checked = window.notificationManager.soundEnabled;
+                        soundCheckbox.addEventListener('change', () => {
+                            window.notificationManager.setSoundEnabled(soundCheckbox.checked);
+                        });
+                    }
+
+                    // Marquer le son actif
+                    const activeSound = window.notificationManager.selectedSound;
+                    const activeOption = document.querySelector(`.sound-option[data-sound="${activeSound}"]`);
+                    if (activeOption) {
+                        activeOption.classList.add('active');
+                    }
+                }
+
+                function updateNotificationStatus() {
+                    if ('Notification' in window) {
+                        const permission = Notification.permission;
+                        let statusText = '';
+                        let isEnabled = false;
+
+                        switch (permission) {
+                            case 'granted':
+                                statusText = 'Activé';
+                                isEnabled = true;
+                                break;
+                            case 'denied':
+                                statusText = 'Bloqué';
+                                break;
+                            default:
+                                statusText = 'Désactivé';
+                        }
+
+                        notificationStatus.textContent = statusText;
+                        notificationBtn.classList.toggle('enabled', isEnabled);
+                    }
+                }
             }
         });
     </script>
