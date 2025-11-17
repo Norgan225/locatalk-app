@@ -354,6 +354,9 @@ class UserPresenceManager {
      * Mettre à jour l'UI avec le nouveau statut
      */
     updateUI(userId, statusDetails) {
+        // Déterminer le statut bref en dehors de la boucle
+        const inferredStatus = statusDetails.status || (statusDetails.label && statusDetails.label.toLowerCase().includes('en ligne') ? 'online' : 'offline');
+
         // Trouver tous les éléments de statut pour cet utilisateur
         // (widgets, user lists use data-user-status) et conversation list uses data-user-id on conversation-item
         const statusElements = [
@@ -387,9 +390,6 @@ class UserPresenceManager {
             } else if (customMessage) {
                 customMessage.style.display = 'none';
             }
-
-            // Déterminer le statut bref si renseigné
-            const inferredStatus = statusDetails.status || (statusDetails.label && statusDetails.label.toLowerCase().includes('en ligne') ? 'online' : 'offline');
 
             // Ajouter une classe pour l'animation
             element.classList.add('status-updated');
@@ -479,6 +479,22 @@ class UserPresenceManager {
                     status_details: { color: '#ef4444', label: 'Hors ligne' },
                     last_activity: new Date().toISOString()
                 });
+            });
+
+            // Émettre des événements pour tous les utilisateurs actuellement en ligne
+            // (nécessaire pour mettre à jour les headers de conversation après chargement)
+            currentOnlineIds.forEach(userId => {
+                const user = onlineUsers.find(u => u.user_id === userId);
+                if (user) {
+                    // Émettre l'événement même si l'utilisateur était déjà en ligne
+                    this.handleStatusChange({
+                        user_id: userId,
+                        status: 'online',
+                        status_details: user.status_details,
+                        last_activity: user.last_activity,
+                        device_type: user.device_type
+                    });
+                }
             });
 
         } catch (error) {

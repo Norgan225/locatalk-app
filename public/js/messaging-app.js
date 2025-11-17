@@ -19,6 +19,10 @@ class MessagingApp {
         this.selectedFiles = [];
         this.voiceRecorder = null;
 
+        // Cache pour éviter les changements de statut trop fréquents
+        this.statusCache = new Map(); // userId -> {status, timestamp}
+        this.statusChangeCooldown = 2000; // 2 secondes minimum entre changements
+
         console.log('🔧 Appel de init()...');
         this.init();
     }
@@ -254,63 +258,71 @@ class MessagingApp {
      */
     async refreshConversationStatuses() {
         try {
-            // Si on a un presenceManager initialisé, utiliser sa source (plus réactive)
-            let conversations = [];
+            // Utiliser uniquement le presenceManager pour éviter les conflits
             if (window.userPresenceManager) {
                 try {
-                    // Récupérer la liste en ligne via presenceManager (API + cache interne)
+                    // Récupérer la liste en ligne via presenceManager (plus fiable)
                     const onlineList = await window.userPresenceManager.getOnlineUsers();
                     const onlineIds = new Set(onlineList.map(u => u.user_id));
 
                     // Mettre à jour les conversations en mémoire et dans le DOM
                     this.conversations.forEach(conv => {
                         const newStatus = onlineIds.has(conv.user_id) ? 'online' : 'offline';
-                        conv.user_status = newStatus;
 
-                        const badge = document.querySelector(`.conversation-item[data-user-id="${conv.user_id}"] .status-badge`);
-                        if (badge) {
-                            badge.className = 'status-badge';
-                            badge.classList.add(`status-${newStatus}`);
+                        // Vérifier le cache pour éviter les changements trop fréquents
+                        const cached = this.statusCache.get(conv.user_id);
+                        const now = Date.now();
+
+                        if (cached && cached.status === newStatus && (now - cached.timestamp) < this.statusChangeCooldown) {
+                            return; // Pas de changement nécessaire
+                        }
+
+                        // Éviter les changements inutiles pour éviter le clignotement
+                        if (conv.user_status !== newStatus) {
+                            conv.user_status = newStatus;
+                            this.statusCache.set(conv.user_id, { status: newStatus, timestamp: now });
+
+                            const badge = document.querySelector(`.conversation-item[data-user-id="${conv.user_id}"] .status-badge`);
+                            if (badge) {
+                                badge.className = 'status-badge';
+                                badge.classList.add(`status-${newStatus}`);
+                            }
                         }
                     });
 
-                    conversations = this.conversations;
+                    return; // Succès avec presenceManager, pas besoin du fallback
                 } catch (e) {
-                    // En cas d'échec, retomber sur l'API normale
-                    console.warn('❗ presenceManager.getOnlineUsers échoué, fallback sur API:', e);
+                    console.warn('❗ presenceManager.getOnlineUsers échoué:', e);
                 }
             }
 
-            // Si conversations n'a pas été rempli par presenceManager, faire appel à l'API
-            if (!conversations || conversations.length === 0) {
-                const response = await fetch('/api/messaging/conversations', this._fetchOptions('GET'));
+            // Fallback uniquement si presenceManager n'est pas disponible
+            console.log('🔄 [REFRESH] Utilisation du fallback API conversations');
+            const response = await fetch('/api/messaging/conversations', this._fetchOptions('GET'));
 
-                if (!response.ok) return;
+            if (!response.ok) return;
 
-                const data = await response.json();
-                conversations = data.conversations || [];
+            const data = await response.json();
+            const conversations = data.conversations || [];
 
-                // Mettre à jour uniquement les badges de statut dans le DOM
-                conversations.forEach(conv => {
-                    const badge = document.querySelector(`.conversation-item[data-user-id="${conv.user_id}"] .status-badge`);
-                    if (badge) {
+            // Mettre à jour uniquement les badges de statut dans le DOM
+            conversations.forEach(conv => {
+                const badge = document.querySelector(`.conversation-item[data-user-id="${conv.user_id}"] .status-badge`);
+                if (badge) {
+                    const newStatus = conv.user_status || 'offline';
+                    const currentStatus = badge.classList.contains('status-online') ? 'online' : 'offline';
+
+                    // Éviter les changements inutiles
+                    if (currentStatus !== newStatus) {
                         // Retirer les anciennes classes de statut
                         badge.className = 'status-badge';
                         // Ajouter la nouvelle classe de statut
-                        badge.classList.add(`status-${conv.user_status || 'offline'}`);
+                        badge.classList.add(`status-${newStatus}`);
                     }
-                });
-            }
-
-            // Mettre à jour aussi le header de la conversation actuelle si elle est ouverte
-            if (this.currentConversation && this.currentConversation.id) {
-                const currentConv = conversations.find(c => c.user_id === this.currentConversation.id);
-                if (currentConv) {
-                    this.updateUserStatus(this.currentConversation.id, currentConv.user_status || 'offline');
                 }
-            }
+            });
         } catch (error) {
-            console.error('❌ Erreur rafraîchissement statuts:', error);
+            console.error('❌ Erreur refreshConversationStatuses:', error);
         }
     }
 
@@ -507,8 +519,11 @@ class MessagingApp {
 
         let html = '';
         this.conversations.forEach(conv => {
-            const avatarHtml = conv.user_avatar ? ('<img src="/storage/' + conv.user_avatar + '" alt="' + this.escapeHtml(conv.user_name) + '">') : this.escapeHtml((conv.user_name || '').charAt(0));
-            const previewText = conv.last_message ? ((conv.last_message.is_sent_by_me ? 'Vous: ' : '') + this.escapeHtml(conv.last_message.content || '')) : '';
+            const avatarHtml = conv.user_avatar
+                ? ('<img src="/storage/' + conv.user_avatar + '" alt="' + this.escapeHtml(conv.user_name) + '">')
+                : ('<span class="avatar-initial">' + this.escapeHtml((conv.user_name || '').charAt(0).toUpperCase()) + '</span>');
+            const fullPreviewText = conv.last_message ? ((conv.last_message.is_sent_by_me ? 'Vous: ' : '') + this.escapeHtml(conv.last_message.content || '')) : '';
+            const previewText = this.truncatePreviewText(fullPreviewText, 40);
             html += '<div class="conversation-item ' + (conv.user_id === this.currentConversation?.id ? 'active' : '') + ' ' + (conv.unread_count > 0 ? 'unread' : '') + '" data-user-id="' + conv.user_id + '" onclick="window.messagingApp.selectConversation(' + conv.user_id + ')">'
                 + '<div class="conversation-avatar">' + avatarHtml + '<span class="status-badge status-' + (conv.user_status || 'offline') + '"></span></div>'
                 + '<div class="conversation-content"><div class="conversation-header"><span class="conversation-name">' + this.escapeHtml(conv.user_name) + '</span><span class="conversation-time">' + this.formatTime(conv.last_message?.created_at || '') + '</span></div>'
@@ -593,6 +608,28 @@ class MessagingApp {
     }
 
     /**
+     * Mettre à jour le statut d'un utilisateur dans le header de la conversation
+     */
+    updateUserStatus(userId, status) {
+        console.log('✅ [PRESENCE] Header mis à jour - statusText:', status === 'online' ? 'En ligne (vert)' : 'Hors ligne (rouge)');
+
+        // Mettre à jour le badge de statut dans le header
+        const statusEl = document.getElementById('chatUserStatus');
+        if (statusEl) {
+            statusEl.className = `status-badge status-${status}`;
+            console.log('✅ [PRESENCE] Header statusEl classes:', statusEl.className);
+        } else {
+            console.warn('❌ [PRESENCE] Header statusEl introuvable');
+        }
+
+        // Mettre à jour le texte du statut si présent
+        const statusTextEl = document.querySelector('#chatHeader .status-text');
+        if (statusTextEl) {
+            statusTextEl.textContent = status === 'online' ? 'En ligne' : 'Hors ligne';
+        }
+    }
+
+    /**
      * Charger les messages d'une conversation
      */
     async loadConversation(userId) {
@@ -645,14 +682,49 @@ class MessagingApp {
                 if (avatarEl) {
                     try { avatarEl.src = `/storage/${data.user.avatar}`; } catch(e) { console.warn('Impossible de définir chatUserAvatar.src', e); }
                 } else console.warn('chatUserAvatar element introuvable');
-                if (statusEl) statusEl.className = `status-badge status-${data.user.status || 'offline'}`;
-                else console.warn('chatUserStatus element introuvable');
+
+                // Initialiser avec un statut temporaire, le vrai statut sera mis à jour par l'événement user-status-changed
+                if (statusEl) {
+                    statusEl.className = 'status-badge status-offline'; // Temporaire, sera corrigé par l'événement
+                    console.log('🔄 [LOAD_CONV_STATUS] Statut temporaire défini, en attente de mise à jour par presenceManager');
+                } else {
+                    console.warn('chatUserStatus element introuvable');
+                }
             }
 
             console.log('✅ [LOAD_CONV_SUCCESS] Chargement terminé avec succès pour userId:', userId);
 
-            // S'assurer que le statut de l'utilisateur est correctement affiché
-            this.updateUserStatus(userId, this.onlineUsers.has(userId) ? 'online' : 'offline');
+            // Déclencher une mise à jour du statut pour le header (le presenceManager va émettre l'événement)
+            if (window.userPresenceManager) {
+                // Forcer une vérification immédiate du statut de cet utilisateur
+                try {
+                    const onlineUsers = await window.userPresenceManager.getOnlineUsers();
+                    const userOnline = onlineUsers.find(u => u.user_id === userId);
+                    if (userOnline) {
+                        // Émettre directement l'événement pour mettre à jour le header
+                        window.dispatchEvent(new CustomEvent('user-status-changed', {
+                            detail: {
+                                userId: userId,
+                                statusDetails: userOnline.status_details,
+                                status: userOnline.status || 'online'
+                            }
+                        }));
+                        console.log('✅ [PRESENCE] Événement user-status-changed émis pour userId:', userId);
+                    } else {
+                        // Utilisateur hors ligne
+                        window.dispatchEvent(new CustomEvent('user-status-changed', {
+                            detail: {
+                                userId: userId,
+                                statusDetails: { color: '#ef4444', label: 'Hors ligne' },
+                                status: 'offline'
+                            }
+                        }));
+                        console.log('✅ [PRESENCE] Événement user-status-changed émis (offline) pour userId:', userId);
+                    }
+                } catch (e) {
+                    console.warn('❗ Erreur lors de la vérification du statut:', e);
+                }
+            }
 
         } catch (error) {
             console.error('❌ [LOAD_CONV_CATCH] Erreur dans loadConversation:', error.message);
@@ -2691,6 +2763,31 @@ class MessagingApp {
         if (sendBtn) {
             sendBtn.disabled = !hasContent && !hasFiles && !hasVoice;
         }
+    }
+
+    /**
+     * Tronquer le texte de prévisualisation à une longueur maximale
+     */
+    truncatePreviewText(text, maxLength = 40) {
+        if (!text || text.length <= maxLength) {
+            return text;
+        }
+
+        // Essayer de couper aux mots (maximum 5 mots)
+        const words = text.split(' ');
+        if (words.length <= 5) {
+            return text.length <= maxLength ? text : text.substring(0, maxLength - 3) + '...';
+        }
+
+        // Prendre les 5 premiers mots
+        const truncatedWords = words.slice(0, 5).join(' ');
+
+        // Si ça dépasse la longueur max, couper aux caractères
+        if (truncatedWords.length > maxLength) {
+            return text.substring(0, maxLength - 3) + '...';
+        }
+
+        return truncatedWords + '...';
     }
 }
 

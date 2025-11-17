@@ -242,17 +242,17 @@ class UserStatus extends Model
 
     /**
      * Obtenir tous les utilisateurs en ligne
-     * Raison d'être : utiliser un seuil légèrement plus permissif (15 minutes)
-     * pour tolérer les pings/latences réseau + sessions inactives courtes.
-     * Si vous voulez un comportement plus strict, réduire ce seuil.
+     * Logique stricte : seulement les utilisateurs avec activité récente (2-5 minutes)
+     * pour éviter de compter des statuts obsolètes
      */
     public static function getOnlineUsers()
     {
-        return static::where('status', 'online')
+        return static::where('last_activity', '>=', Carbon::now()->subMinutes(5))
                      ->where('is_invisible', false)
-                     ->where('last_activity', '>=', Carbon::now()->subMinutes(15))
+                     ->whereNotNull('last_activity')
                      ->with('user')
-                     ->get();
+                     ->get()
+                     ->unique('user_id'); // Éviter les doublons
     }
 
     /**
