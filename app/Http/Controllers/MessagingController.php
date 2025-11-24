@@ -14,6 +14,7 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
+use Intervention\Image\Facades\Image;
 
 class MessagingController extends Controller
 {
@@ -225,7 +226,7 @@ class MessagingController extends Controller
 
         // Validation personnalisée: content requis sauf si c'est un message vocal
         $validator->after(function ($validator) use ($request) {
-            if ($request->type !== 'voice' && !$request->content) {
+            if ($request->type !== 'voice' && !$request->input('content')) {
                 $validator->errors()->add('content', 'Le contenu est requis pour ce type de message');
             }
         });
@@ -236,7 +237,7 @@ class MessagingController extends Controller
 
         $user = $request->user();
         $receiverId = $request->receiver_id;
-        $content = $request->content;
+    $content = $request->input('content');
 
         // Cryptage E2E pour messages directs
         $encryptionKey = EncryptionKey::getOrCreateKey($user->id, $receiverId);
@@ -604,7 +605,7 @@ class MessagingController extends Controller
     private function createThumbnail($file, $originalPath): ?string
     {
         try {
-            $img = \Intervention\Image\Facades\Image::make($file);
+            $img = \Intervention\Image\Facades\Image::make($file); // Vérifier que Intervention Image est bien installé
             $img->fit(300, 300);
 
             $thumbnailPath = str_replace('attachments/', 'attachments/thumbnails/', $originalPath);
@@ -808,7 +809,7 @@ private function optimizeAudioWithFFmpeg($file): ?array
             }, 0);
         } catch (\Exception $e) {
             // En cas d'erreur, ne pas bloquer la recherche
-            \Log::warning('Erreur calcul total_occurrences: ' . $e->getMessage());
+            \Illuminate\Support\Facades\Log::warning('Erreur calcul total_occurrences: ' . $e->getMessage());
             $totalOccurrences = array_sum($results->pluck('match_count')->toArray());
         }
 
@@ -977,7 +978,7 @@ private function optimizeAudioWithFFmpeg($file): ?array
             return (int) ceil($estimatedMinutes * 60);
 
         } catch (\Exception $e) {
-            \Log::warning('Erreur extraction durée média: ' . $e->getMessage());
+            \Illuminate\Support\Facades\Log::warning('Erreur extraction durée média: ' . $e->getMessage());
             return null;
         }
     }

@@ -194,7 +194,7 @@ class MessageController extends Controller
             $encryptionKey = \App\Models\EncryptionKey::getOrCreateKey($user->id, $request->receiver_id);
             $key = $encryptionKey->getDecryptedKey();
 
-            $encrypted = $encryptionService->encrypt($request->content, $key);
+            $encrypted = $encryptionService->encrypt($request->input('content'), $key);
             $encryptedContent = $encrypted['iv'] . ':' . $encrypted['encrypted'];
             $encryptionKeyId = $encryptionKey->key_id;
             $isEncrypted = true;
@@ -205,7 +205,7 @@ class MessageController extends Controller
             'sender_id' => $user->id,
             'receiver_id' => $request->receiver_id,
             'channel_id' => $request->channel_id,
-            'content' => $isEncrypted ? null : $request->content, // Contenu en clair seulement si non crypté
+            'content' => $isEncrypted ? null : $request->input('content'), // Contenu en clair seulement si non crypté
             'encrypted_content' => $encryptedContent,
             'encryption_key_id' => $encryptionKeyId,
             'is_encrypted' => $isEncrypted,
@@ -307,7 +307,7 @@ class MessageController extends Controller
         }
 
         $message->update([
-            'content' => $request->content,
+            'content' => $request->input('content'),
         ]);
 
         // Log activity

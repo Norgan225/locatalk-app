@@ -11,7 +11,7 @@ Route::post('/logout', [AuthController::class, 'logout'])->middleware('auth:sanc
 Route::get('/me', [AuthController::class, 'me'])->middleware('auth:sanctum');
 
 // Routes utilisateurs (protégées)
-Route::middleware(['auth:sanctum', 'check.mac'])->group(function () {
+Route::middleware(['auth:sanctum'])->group(function () {
     // Dashboard & Analytics
     Route::get('dashboard', [\App\Http\Controllers\DashboardController::class, 'index']);
     Route::get('dashboard/analytics', [\App\Http\Controllers\DashboardController::class, 'analytics']);
