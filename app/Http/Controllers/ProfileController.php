@@ -145,4 +145,57 @@ class ProfileController extends Controller
 
         return Redirect::to('/');
     }
+
+    /**
+     * Mettre à jour la clé publique E2E de l'utilisateur
+     */
+    public function updateE2EKey(Request $request)
+    {
+        $request->validate([
+            'e2e_public_key' => 'required|string'
+        ]);
+
+        $user = $request->user();
+        $user->update([
+            'e2e_public_key' => $request->e2e_public_key
+        ]);
+
+        return response()->json([
+            'message' => 'Clé E2E mise à jour avec succès'
+        ]);
+    }
+
+    /**
+     * Update user settings (API endpoint)
+     */
+    public function updateSettings(Request $request)
+    {
+        $validated = $request->validate([
+            'notifications_enabled' => 'boolean',
+            'notification_sound' => 'string|in:bell,chime,notification,gentle',
+            'notification_sound_enabled' => 'boolean',
+        ]);
+
+        $user = $request->user();
+        $user->update($validated);
+
+        return response()->json([
+            'message' => 'Paramètres mis à jour avec succès',
+            'settings' => $validated
+        ]);
+    }
+
+    /**
+     * Get user settings (API endpoint)
+     */
+    public function getSettings(Request $request)
+    {
+        $user = $request->user();
+
+        return response()->json([
+            'notifications_enabled' => $user->notifications_enabled,
+            'notification_sound' => $user->notification_sound ?: 'bell',
+            'notification_sound_enabled' => $user->notification_sound_enabled !== false,
+        ]);
+    }
 }

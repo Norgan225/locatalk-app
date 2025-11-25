@@ -3,11 +3,195 @@
     <!-- Présence utilisateur (pastilles) -->
     <link rel="stylesheet" href="{{ asset('css/user-presence.css') }}?v={{ time() }}&r={{ rand() }}">
 
+    <!-- Viewport meta tag pour mobile -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+
+    <!-- Styles pour les paramètres de notification -->
+    <style>
+        /* Styles pour le bouton de notification */
+        .notification-container {
+            position: relative;
+            display: inline-block;
+        }
+
+        .notification-toggle {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 8px;
+            padding: 8px 12px;
+            color: white;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            font-size: 14px;
+        }
+
+        .notification-toggle:hover {
+            background: rgba(255, 255, 255, 0.15);
+        }
+
+        .notification-toggle.enabled {
+            background: rgba(77, 171, 247, 0.2);
+            border-color: #4dabf7;
+        }
+
+        .notification-icon {
+            font-size: 16px;
+        }
+
+        .notification-text {
+            font-weight: 500;
+        }
+
+        .notification-status {
+            font-size: 12px;
+            opacity: 0.8;
+        }
+
+        .notification-arrow {
+            font-size: 12px;
+            transition: transform 0.2s ease;
+        }
+
+        /* Styles pour le menu déroulant */
+        .notification-menu {
+            position: absolute;
+            top: 100%;
+            left: 0;
+            background: rgba(0, 0, 0, 0.95);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 12px;
+            width: 280px;
+            z-index: 10000 !important;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+            backdrop-filter: blur(10px);
+            margin-top: 4px;
+            max-height: 400px;
+            overflow-y: auto;
+            opacity: 1 !important;
+            visibility: visible !important;
+        }
+
+        .notification-menu.hidden {
+            display: none;
+        }
+
+        .menu-section {
+            padding: 12px 0;
+        }
+
+        .menu-section:not(:last-child) {
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .menu-title {
+            padding: 0 16px;
+            font-size: 12px;
+            font-weight: 600;
+            color: rgba(255, 255, 255, 0.6);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 8px;
+        }
+
+        .menu-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            width: 100%;
+            padding: 10px 16px;
+            background: none;
+            border: none;
+            color: white;
+            cursor: pointer;
+            transition: background 0.2s ease;
+            font-size: 14px;
+            text-align: left;
+        }
+
+        .menu-item:hover {
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        .menu-item.active {
+            background: rgba(77, 171, 247, 0.2);
+            color: #4dabf7;
+        }
+
+        .menu-icon {
+            font-size: 16px;
+            width: 20px;
+            text-align: center;
+        }
+
+        .sound-test {
+            margin-left: auto;
+            opacity: 0.6;
+            transition: opacity 0.2s ease;
+        }
+
+        .sound-test:hover {
+            opacity: 1;
+        }
+
+        /* Styles pour la checkbox */
+        .sound-toggle {
+            cursor: pointer;
+            user-select: none;
+        }
+
+        .sound-toggle input {
+            position: absolute;
+            opacity: 0;
+            cursor: pointer;
+        }
+
+        .checkmark {
+            position: relative;
+            display: inline-block;
+            width: 18px;
+            height: 18px;
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            border-radius: 3px;
+            margin-right: 12px;
+            transition: all 0.2s ease;
+        }
+
+        .sound-toggle input:checked ~ .checkmark {
+            background: #4dabf7;
+            border-color: #4dabf7;
+        }
+
+        .checkmark:after {
+            content: "";
+            position: absolute;
+            display: none;
+            left: 6px;
+            top: 2px;
+            width: 4px;
+            height: 8px;
+            border: solid white;
+            border-width: 0 2px 2px 0;
+            transform: rotate(45deg);
+        }
+
+        .sound-toggle input:checked ~ .checkmark:after {
+            display: block;
+        }
+    </style>
+
     <!-- Scripts -->
     <script src="{{ asset('js/messaging-app.js') }}?v={{ time() }}&r={{ rand() }}"></script>
     <script src="{{ asset('js/voice-recorder.js') }}?v={{ time() }}&r={{ rand() }}"></script>
     <script src="{{ asset('js/link-preview.js') }}?v={{ time() }}&r={{ rand() }}"></script>
     <script src="{{ asset('js/user-presence.js') }}?v={{ time() }}&r={{ rand() }}"></script>
+    <script src="{{ asset('js/e2e-encryption.js') }}?v={{ time() }}&r={{ rand() }}"></script>
+    <script src="{{ asset('js/sound-manager.js') }}?v={{ time() }}&r={{ rand() }}"></script>
+    <!-- <script src="{{ asset('js/push-notification-manager.js') }}?v={{ time() }}&r={{ rand() }}"></script> -->
+    <!-- <script src="{{ asset('js/notifications.js') }}?v={{ time() }}&r={{ rand() }}"></script> -->
 
     <!-- Configuration Pusher (même si non utilisé, pour compatibilité) -->
     <script>
@@ -48,25 +232,30 @@
                 </p>
             </div>
         </div>
-        <a href="{{ route('web.messages.classic') }}"
-           style="background: rgba(255, 255, 255, 0.1);
-                  color: white;
-                  padding: 10px 16px;
-                  border-radius: 10px;
-                  text-decoration: none;
-                  display: inline-flex;
-                  align-items: center;
-                  gap: 8px;
-                  border: 1px solid rgba(255, 255, 255, 0.2);
-                  transition: all 0.2s ease;
-                  font-size: 14px;"
-           onmouseover="this.style.background='rgba(255, 255, 255, 0.15)'"
-           onmouseout="this.style.background='rgba(255, 255, 255, 0.1)'">
-            📋 Interface Classique
-        </a>
+        <div style="display: flex; align-items: center; gap: 12px;">
+            <a href="{{ route('web.messages.classic') }}"
+               style="background: rgba(255, 255, 255, 0.1);
+                      color: white;
+                      padding: 10px 16px;
+                      border-radius: 10px;
+                      text-decoration: none;
+                      display: inline-flex;
+                      align-items: center;
+                      gap: 8px;
+                      border: 1px solid rgba(255, 255, 255, 0.2);
+                      transition: all 0.2s ease;
+                      font-size: 14px;"
+               onmouseover="this.style.background='rgba(255, 255, 255, 0.15)'"
+               onmouseout="this.style.background='rgba(255, 255, 255, 0.1)'">
+                📋 Interface Classique
+            </a>
+        </div>
     </div>
 
     <div class="messaging-app">
+        <!-- Overlay pour mobile -->
+        <div id="mobileOverlay" class="mobile-overlay"></div>
+
         <!-- Liste des conversations -->
         <div class="conversations-sidebar">
             <div class="sidebar-header">
@@ -82,6 +271,58 @@
                            id="searchConversations"
                            class="search-box"
                            placeholder="🔍 Rechercher une conversation...">
+                </div>
+                <!-- Bouton Paramètres de Notification -->
+                <div class="notification-container" style="margin-top: 16px;">
+                    <button id="notificationToggleBtn" class="notification-toggle" type="button" title="Notifications & Sons">
+                        <span class="notification-icon">🔔</span>
+                        <span class="notification-text">Notifications</span>
+                        <span class="notification-status" id="notificationStatus">Désactivé</span>
+                        <span class="notification-arrow">▼</span>
+                    </button>
+
+                    <!-- Menu déroulant des options -->
+                    <div id="notificationMenu" class="notification-menu hidden">
+                        <div class="menu-section">
+                            <div class="menu-title">Notifications</div>
+                            <button id="requestPermissionBtn" class="menu-item">
+                                <span class="menu-icon">🔔</span>
+                                <span>Activer les notifications</span>
+                            </button>
+                        </div>
+
+                        <div class="menu-section">
+                            <div class="menu-title">Sonneries</div>
+                            <button class="menu-item sound-option" data-sound="bell">
+                                <span class="menu-icon">🔔</span>
+                                <span>Cloche</span>
+                                <span class="sound-test">▶️</span>
+                            </button>
+                            <button class="menu-item sound-option" data-sound="chime">
+                                <span class="menu-icon">🎵</span>
+                                <span>Carillon</span>
+                                <span class="sound-test">▶️</span>
+                            </button>
+                            <button class="menu-item sound-option" data-sound="notification">
+                                <span class="menu-icon">📱</span>
+                                <span>Moderne</span>
+                                <span class="sound-test">▶️</span>
+                            </button>
+                            <button class="menu-item sound-option" data-sound="gentle">
+                                <span class="menu-icon">😌</span>
+                                <span>Doux</span>
+                                <span class="sound-test">▶️</span>
+                            </button>
+                        </div>
+
+                        <div class="menu-section">
+                            <label class="menu-item sound-toggle">
+                                <input type="checkbox" id="soundEnabledCheckbox">
+                                <span class="checkmark"></span>
+                                <span>Activer les sons</span>
+                            </label>
+                        </div>
+                    </div>
                 </div>
             </div>
 
@@ -115,6 +356,10 @@
                     </div>
                 </div>
                 <div class="chat-actions">
+                    <button class="icon-btn mobile-only" id="toggleSidebarBtn" title="Conversations" style="background: linear-gradient(135deg, #fbbb2a, #df5526); border: 2px solid rgba(255, 255, 255, 0.3); box-shadow: 0 4px 12px rgba(251, 187, 42, 0.4); position: relative;">
+                        ☰ <span id="conversationsCount" class="badge" style="background: rgba(255, 255, 255, 0.9); color: #df5526; margin-left: 4px;">0</span>
+                        <span id="unreadIndicator" class="unread-indicator" style="display: none; position: absolute; top: -2px; right: -2px; width: 8px; height: 8px; background: #df5526; border-radius: 50%; border: 2px solid rgba(255, 255, 255, 0.9);"></span>
+                    </button>
                     <button class="icon-btn" id="showPinnedBtn" title="Messages épinglés">
                         📌 <span id="pinnedCount" class="badge">0</span>
                     </button>
@@ -279,13 +524,28 @@
         if (!window.messagingApp) {
             console.log('🆕 Création de messagingApp...');
             const authToken = '{{ $plainToken }}';
+            console.log('🔑 Auth token length:', authToken ? authToken.length : 'null');
 
-            window.messagingApp = new MessagingApp(
-                {{ $user->id }},
-                '{{ $user->name }}',
-                authToken
-            );
-            console.log('✅ messagingApp créé:', window.messagingApp);
+            try {
+                window.messagingApp = new MessagingApp(
+                    {{ $user->id }},
+                    '{{ $user->name }}',
+                    authToken
+                );
+                console.log('✅ messagingApp créé:', typeof window.messagingApp);
+                console.log('✅ messagingApp.userId:', window.messagingApp.userId);
+                console.log('✅ messagingApp.authToken length:', window.messagingApp.authToken ? window.messagingApp.authToken.length : 'null');
+            } catch (error) {
+                console.error('❌ Erreur lors de la création de messagingApp:', error);
+                // Créer une instance basique pour éviter les erreurs
+                window.messagingApp = {
+                    selectConversation: function(id) { console.log('selectConversation appelé avec:', id); },
+                    showReactionPicker: function() { console.log('showReactionPicker appelé'); },
+                    toggleAudioPlayer: function() { console.log('toggleAudioPlayer appelé'); },
+                    onReactionClick: function() { console.log('onReactionClick appelé'); },
+                    navigateToMessage: function() { console.log('navigateToMessage appelé'); }
+                };
+            }
         } else {
             console.log('⚠️ messagingApp déjà défini, réutilisation');
         }
@@ -414,7 +674,10 @@
 
         // Initialiser la présence utilisateur
         document.addEventListener('DOMContentLoaded', async () => {
+            console.log('🚀 DOMContentLoaded - Début initialisation...');
             const userId = {{ auth()->id() }};
+
+            console.log('👤 User ID:', userId);
 
             if (userId && window.messagingApp) {
                 console.log('🚀 Initialisation de la présence utilisateur...');
@@ -422,6 +685,217 @@
                 await window.userPresenceManager.init(userId, window.messagingApp.authToken);
                 console.log('✅ Présence utilisateur initialisée');
             }
+
+            // Initialiser le système de notifications
+            console.log('🚀 Initialisation du système de notifications...');
+
+            // 1. Créer le gestionnaire de paramètres de notification
+            window.notificationSettings = new NotificationSettingsManager();
+            await window.notificationSettings.init();
+            console.log('✅ NotificationSettingsManager initialisé');
+
+            // 2. Initialiser le PushNotificationManager (pour compatibilité) - COMMENTÉ CAR CAUSE DES PROBLÈMES
+            /*
+            if (typeof PushNotificationManager !== 'undefined') {
+                console.log('� Initialisation du PushNotificationManager...');
+                window.pushNotificationManager = new PushNotificationManager();
+                await window.pushNotificationManager.init();
+                console.log('✅ PushNotificationManager initialisé');
+
+                // Alias pour compatibilité avec notification-settings.js
+                window.notificationManager = window.pushNotificationManager;
+                console.log('🔗 Alias window.notificationManager créé');
+
+                // Connecter immédiatement le bouton de notification
+                initNotificationButton();
+            } else {
+                console.error('❌ PushNotificationManager non trouvé');
+            }
+            */
+
+            // Connecter immédiatement le bouton de notification
+            initNotificationButton();
         });
+
+        // Fonction pour initialiser le bouton de notification
+       function initNotificationButton() {
+            console.log('🎯 Initialisation du bouton de notification...');
+
+            const notificationBtn = document.getElementById('notificationToggleBtn');
+            const notificationMenu = document.getElementById('notificationMenu');
+            const notificationStatus = document.getElementById('notificationStatus');
+            const notificationArrow = notificationBtn?.querySelector('.notification-arrow');
+
+            if (!notificationBtn || !notificationMenu) {
+                console.error('❌ Éléments de notification non trouvés');
+                return;
+            }
+
+            // Mettre à jour le statut initial
+            updateNotificationStatus();
+
+            // Toggle du menu
+            notificationBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                notificationMenu.classList.toggle('hidden');
+                if (notificationArrow) {
+                    const isHidden = notificationMenu.classList.contains('hidden');
+                    notificationArrow.style.transform = isHidden ? 'rotate(0deg)' : 'rotate(180deg)';
+                }
+            });
+
+            // Fermer le menu en cliquant ailleurs
+            document.addEventListener('click', (e) => {
+                if (!notificationBtn.contains(e.target) && !notificationMenu.contains(e.target)) {
+                    notificationMenu.classList.add('hidden');
+                    if (notificationArrow) {
+                        notificationArrow.style.transform = 'rotate(0deg)';
+                    }
+                }
+            });
+
+            // Bouton de permission
+            const permissionBtn = document.getElementById('requestPermissionBtn');
+            if (permissionBtn) {
+                permissionBtn.addEventListener('click', async () => {
+                    try {
+                        await window.notificationSettings.requestPermission();
+                        updateNotificationStatus();
+                        notificationMenu.classList.add('hidden');
+                        if (notificationArrow) {
+                            notificationArrow.style.transform = 'rotate(0deg)';
+                        }
+                        showToast('✅ Notifications activées !', 'success');
+                    } catch (error) {
+                        console.error('Erreur permission:', error);
+                        showToast('❌ ' + error.message, 'error');
+                    }
+                });
+            }
+
+            // Gestion des sonneries
+            const soundOptions = document.querySelectorAll('.sound-option');
+            soundOptions.forEach(option => {
+                option.addEventListener('click', (e) => {
+                    const soundTest = e.target.closest('.sound-test');
+
+                    if (soundTest) {
+                        // Tester le son
+                        const soundName = option.dataset.sound;
+                        window.notificationSettings.testSound(soundName);
+                    } else {
+                        // Changer le son actif
+                        const soundName = option.dataset.sound;
+                        window.notificationSettings.setSound(soundName);
+                        soundOptions.forEach(opt => opt.classList.remove('active'));
+                        option.classList.add('active');
+                        showToast(`🎵 Son changé : ${getSoundLabel(soundName)}`, 'info');
+                    }
+                });
+            });
+
+            // Activer/désactiver les sons
+            const soundCheckbox = document.getElementById('soundEnabledCheckbox');
+            if (soundCheckbox) {
+                soundCheckbox.checked = window.notificationSettings.soundEnabled;
+                soundCheckbox.addEventListener('change', () => {
+                    window.notificationSettings.setSoundEnabled(soundCheckbox.checked);
+                    showToast(soundCheckbox.checked ? '🔊 Sons activés' : '🔇 Sons désactivés', 'info');
+                });
+            }
+
+            // Marquer le son actif
+            const activeSound = window.notificationSettings.selectedSound;
+            const activeOption = document.querySelector(`.sound-option[data-sound="${activeSound}"]`);
+            if (activeOption) {
+                activeOption.classList.add('active');
+            }
+
+            console.log('🎉 Bouton de notification initialisé !');
+        }
+
+        /**
+         * Mettre à jour le statut des notifications
+         */
+        function updateNotificationStatus() {
+            const notificationStatus = document.getElementById('notificationStatus');
+            const notificationBtn = document.getElementById('notificationToggleBtn');
+
+            if (!notificationStatus || !notificationBtn) return;
+
+            const statusText = window.notificationSettings.getPermissionStatusText();
+            const permission = window.notificationSettings.getPermissionStatus();
+
+            notificationStatus.textContent = statusText;
+
+            // Ajouter une classe selon le statut
+            notificationBtn.classList.remove('enabled', 'disabled', 'blocked');
+
+            if (permission === 'granted') {
+                notificationBtn.classList.add('enabled');
+            } else if (permission === 'denied') {
+                notificationBtn.classList.add('blocked');
+            } else {
+                notificationBtn.classList.add('disabled');
+            }
+
+            console.log('📊 Statut mis à jour:', statusText, '/', permission);
+        }
+
+        /**
+         * Obtenir le label d'un son
+         */
+        function getSoundLabel(soundName) {
+            const labels = {
+                'bell': 'Cloche',
+                'chime': 'Carillon',
+                'notification': 'Moderne',
+                'gentle': 'Doux'
+            };
+            return labels[soundName] || soundName;
+        }
+
+        /**
+         * Afficher un toast (notification temporaire)
+         */
+        function showToast(message, type = 'info') {
+            const toast = document.createElement('div');
+            toast.className = `toast toast-${type}`;
+            toast.textContent = message;
+
+            toast.style.cssText = `
+                position: fixed;
+                bottom: 20px;
+                right: 20px;
+                background: ${type === 'success' ? '#10b981' : type === 'error' ? '#ef4444' : '#3b82f6'};
+                color: white;
+                padding: 12px 20px;
+                border-radius: 8px;
+                box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+                z-index: 10000;
+                animation: slideInRight 0.3s ease;
+            `;
+
+            document.body.appendChild(toast);
+
+            setTimeout(() => {
+                toast.style.animation = 'slideOutRight 0.3s ease';
+                setTimeout(() => toast.remove(), 300);
+            }, 3000);
+        }
+
+        // Animations CSS
+        const style = document.createElement('style');
+        style.textContent = `
+            @keyframes slideInRight {
+                from { transform: translateX(100%); opacity: 0; }
+                to { transform: translateX(0); opacity: 1; }
+            }
+            @keyframes slideOutRight {
+                from { transform: translateX(0); opacity: 1; }
+                to { transform: translateX(100%); opacity: 0; }
+            }
+        `;
+        document.head.appendChild(style);
     </script>
 </x-app-layout>

@@ -485,4 +485,71 @@ class UserController extends Controller
 
         return redirect()->route('web.users.show', $user->id)->with('success', 'Utilisateur restauré avec succès');
     }
+
+    /**
+     * Obtenir la clé publique d'un utilisateur pour E2E encryption
+     */
+    public function getPublicKey(Request $request, $userId): JsonResponse
+    {
+        try {
+            $user = User::findOrFail($userId);
+
+            // Vérifier que l'utilisateur a une clé publique
+            if (!$user->e2e_public_key) {
+                return response()->json(['message' => 'Clé publique non trouvée'], 404);
+            }
+
+            return response()->json([
+                'public_key' => $user->e2e_public_key
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Erreur récupération clé publique E2E', [
+                'user_id' => $userId,
+                'error' => $e->getMessage()
+            ]);
+
+            return response()->json(['message' => 'Erreur serveur'], 500);
+        }
+    }
+
+    /**
+     * Établir une connexion E2E avec un utilisateur
+     */
+    public function establishE2EConnection(Request $request, $userId): JsonResponse
+    {
+        try {
+            $user = $request->user();
+            $targetUser = User::findOrFail($userId);
+
+            $request->validate([
+                'public_key' => 'required|string',
+                'encrypted_secret' => 'required|string'
+            ]);
+
+            // Sauvegarder la clé publique de l'utilisateur actuel si pas déjà fait
+            if (!$user->e2e_public_key) {
+                $user->update(['e2e_public_key' => $request->public_key]);
+            }
+
+            // Ici on pourrait stocker les secrets partagés dans une table dédiée
+            // Pour l'instant, on confirme juste l'établissement de la connexion
+
+            Log::info('Connexion E2E établie', [
+                'from_user' => $user->id,
+                'to_user' => $userId
+            ]);
+
+            return response()->json([
+                'message' => 'Connexion E2E établie avec succès'
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Erreur établissement connexion E2E', [
+                'from_user' => $request->user()->id,
+                'to_user' => $userId,
+                'error' => $e->getMessage()
+            ]);
+
+            return response()->json(['message' => 'Erreur serveur'], 500);
+        }
+    }
 }

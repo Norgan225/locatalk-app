@@ -43,6 +43,13 @@ class SoundManager {
     }
 
     /**
+     * Jouer un son (alias pour compatibilité)
+     */
+    async playSound(soundName = null) {
+        return this.play(soundName);
+    }
+
+    /**
      * Jouer un son
      */
     async play(soundName = null) {
@@ -210,3 +217,6 @@ class SoundManager {
         return Object.keys(this.sounds);
     }
 }
+
+// Export global
+window.SoundManager = SoundManager;

@@ -21,6 +21,7 @@ Route::middleware(['auth:sanctum'])->group(function () {
     Route::put('profile', [\App\Http\Controllers\ProfileController::class, 'update']);
     Route::post('profile/change-password', [\App\Http\Controllers\ProfileController::class, 'changePassword']);
     Route::post('profile/settings', [\App\Http\Controllers\ProfileController::class, 'updateSettings']);
+    Route::get('profile/settings', [\App\Http\Controllers\ProfileController::class, 'getSettings']);
     Route::post('profile/avatar', [\App\Http\Controllers\ProfileController::class, 'uploadAvatar']);
     Route::delete('profile/avatar', [\App\Http\Controllers\ProfileController::class, 'deleteAvatar']);
     Route::get('profile/devices', [\App\Http\Controllers\ProfileController::class, 'devices']);
@@ -97,6 +98,7 @@ Route::middleware(['auth:sanctum'])->group(function () {
     Route::delete('notifications/delete-all-read', [\App\Http\Controllers\NotificationController::class, 'deleteAllRead']);
     Route::apiResource('notifications', \App\Http\Controllers\NotificationController::class)->only(['index', 'destroy']);
     Route::post('notifications/{id}/mark-read', [\App\Http\Controllers\NotificationController::class, 'markAsRead']);
+    Route::get('notifications/check', [\App\Http\Controllers\NotificationController::class, 'checkNew']);
 
     // User Status API (Présence en temps réel)
     Route::get('status', [\App\Http\Controllers\UserStatusController::class, 'show']);
@@ -126,4 +128,10 @@ Route::middleware(['auth:sanctum'])->group(function () {
     Route::delete('messaging/messages/{messageId}', [\App\Http\Controllers\MessagingController::class, 'deleteMessage']);
     Route::post('messaging/typing', [\App\Http\Controllers\MessagingController::class, 'typing']);
     Route::post('messaging/link-preview', [\App\Http\Controllers\MessagingController::class, 'getLinkPreview']);
+
+    Route::post('profile/update-e2e-key', [\App\Http\Controllers\ProfileController::class, 'updateE2EKey']);
+
+    // E2E Encryption routes
+    Route::get('users/{id}/public-key', [\App\Http\Controllers\UserController::class, 'getPublicKey']);
+    Route::post('users/{id}/establish-e2e', [\App\Http\Controllers\UserController::class, 'establishE2EConnection']);
 });

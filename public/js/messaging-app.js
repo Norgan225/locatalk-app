@@ -19,6 +19,9 @@ class MessagingApp {
         this.selectedFiles = [];
         this.voiceRecorder = null;
 
+        // Service de chiffrement E2E
+        this.encryptionService = null;
+
         // Cache pour éviter les changements de statut trop fréquents
         this.statusCache = new Map(); // userId -> {status, timestamp}
         this.statusChangeCooldown = 2000; // 2 secondes minimum entre changements
@@ -46,11 +49,80 @@ class MessagingApp {
             window.voiceRecorder = this.voiceRecorder;
         }
 
+        // Initialiser le service de chiffrement E2E
+        this.initEncryptionService();
+
         // Polling pour actualiser les messages en temps réel
         this.startPolling();
 
         // Initialiser l'état du bouton d'envoi
         this.updateSendButtonState();
+    }
+
+    /**
+     * Établir une connexion E2E avec un destinataire
+     */
+    async establishE2EConnection(recipientId) {
+        try {
+            console.log(`🔐 Établissement connexion E2E avec ${recipientId}`);
+
+            // Récupérer la clé publique du destinataire depuis l'API
+            const response = await fetch(`/api/users/${recipientId}/public-key`, {
+                headers: {
+                    'Authorization': `Bearer ${this.authToken}`,
+                    'Accept': 'application/json'
+                }
+            });
+
+            if (!response.ok) {
+                throw new Error('Impossible de récupérer la clé publique du destinataire');
+            }
+
+            const data = await response.json();
+            const recipientPublicKey = data.public_key;
+
+            // Générer un secret partagé
+            await this.encryptionService.generateSharedSecret(recipientId, recipientPublicKey);
+
+            // Envoyer notre clé publique chiffrée au destinataire
+            const ourPublicKey = await this.encryptionService.exportPublicKey();
+            const encryptedSharedSecret = await this.encryptionService.encryptSharedSecret(recipientId);
+
+            await fetch(`/api/users/${recipientId}/establish-e2e`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${this.authToken}`,
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json'
+                },
+                body: JSON.stringify({
+                    public_key: ourPublicKey,
+                    encrypted_secret: encryptedSharedSecret
+                })
+            });
+
+            console.log(`✅ Connexion E2E établie avec ${recipientId}`);
+        } catch (error) {
+            console.error('❌ Erreur établissement connexion E2E:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Initialiser le service de chiffrement E2E
+     */
+    async initEncryptionService() {
+        try {
+            if (typeof E2EEncryptionService !== 'undefined') {
+                this.encryptionService = new E2EEncryptionService();
+                await this.encryptionService.initialize();
+                console.log('🔐 Service E2E Encryption initialisé avec succès');
+            } else {
+                console.warn('⚠️ Service E2E Encryption non disponible');
+            }
+        } catch (error) {
+            console.error('❌ Erreur lors de l\'initialisation du chiffrement E2E:', error);
+        }
     }
 
     _fetchOptions(method = 'GET', body = null) {
@@ -345,7 +417,7 @@ class MessagingApp {
             if (newMessages.length > currentCount) {
                 // Nouveaux messages détectés
                 this.messages[this.currentConversation.id] = newMessages;
-                this.renderMessages();
+                await this.renderMessages();
                 this.scrollToBottom();
                 console.log('🔄 Nouveaux messages reçus:', newMessages.length - currentCount);
             }
@@ -581,6 +653,12 @@ class MessagingApp {
         // Définir la conversation courante
         this.currentConversation = { id: userId };
 
+        // Réinitialiser le compteur de messages non lus pour cette conversation
+        const conv = this.conversations.find(c => c.user_id === userId);
+        if (conv) {
+            conv.unread_count = 0;
+        }
+
         // Afficher la zone de chat
         this.showChatArea();
 
@@ -604,6 +682,21 @@ class MessagingApp {
         const activeItem = document.querySelector(`.conversation-item[data-user-id="${userId}"]`);
         if (activeItem) {
             activeItem.classList.add('active');
+
+            // Réinitialiser le compteur de messages non lus
+            const unreadBadge = activeItem.querySelector('.unread-badge');
+            if (unreadBadge) {
+                unreadBadge.remove();
+            }
+
+            // Retirer la classe unread du texte de prévisualisation
+            const previewElement = activeItem.querySelector('.conversation-preview');
+            if (previewElement) {
+                previewElement.classList.remove('unread');
+            }
+
+            // Retirer la classe unread de l'élément de conversation
+            activeItem.classList.remove('unread');
         }
     }
 
@@ -667,7 +760,7 @@ class MessagingApp {
 
             // Rendre les messages
             console.log('🎨 [LOAD_CONV_RENDER] Appel renderMessages');
-            this.renderMessages();
+            await this.renderMessages();
 
             // Défiler vers le bas
             this.scrollToBottom();
@@ -760,7 +853,7 @@ class MessagingApp {
             if (toPrefix.length) {
                 this.messages[userId] = toPrefix.concat(this.messages[userId]);
                 // Rendre et conserver le scroll position raisonnable
-                this.renderMessages();
+                await this.renderMessages();
             }
 
             // Mettre à jour pagination stockée
@@ -777,7 +870,7 @@ class MessagingApp {
     /**
      * Afficher les messages
      */
-    renderMessages() {
+    async renderMessages() {
         const container = document.getElementById('messagesList');
         if (!container || !this.currentConversation) {
             console.error('❌ Container ou conversation manquant');
@@ -797,10 +890,7 @@ class MessagingApp {
         let html = '';
         let lastDate = null;
 
-        messages.forEach((msg, index) => {
-            if (index === 0) {
-                console.log('🔍 [RENDER_MSGS] Premier message forEach:', msg);
-            }
+        for (const msg of messages) {
             const msgDate = new Date(msg.created_at || msg.timestamp);
             const dateKey = msgDate.toDateString();
 
@@ -809,8 +899,8 @@ class MessagingApp {
                 lastDate = dateKey;
             }
 
-            html += this.renderMessage(msg);
-        });
+            html += await this.renderMessage(msg);
+        }
 
         container.innerHTML = html;
         console.log('✅ Messages rendus dans le DOM');
@@ -853,7 +943,7 @@ class MessagingApp {
     /**
      * Rendre un message individuel
      */
-    renderMessage(msg) {
+    async renderMessage(msg) {
         // Vérifier is_sent_by_me OU comparer sender_id avec userId
         const isSent = msg.is_sent_by_me || (msg.sender_id === this.userId);
         const reactions = msg.reactions || [];
@@ -862,9 +952,22 @@ class MessagingApp {
         const groupedReactions = this.groupReactions(reactions);
         const hasReactions = Object.keys(groupedReactions).length > 0;
 
+        // Déchiffrer le contenu si nécessaire
+        let decryptedContent = msg.content;
+        if (this.encryptionService && msg.is_encrypted && !isSent) {
+            try {
+                const encryptedData = JSON.parse(msg.content);
+                decryptedContent = await this.encryptionService.decryptMessage(encryptedData, msg.sender_id);
+                console.log('🔓 Message déchiffré');
+            } catch (error) {
+                console.warn('⚠️ Échec du déchiffrement:', error);
+                decryptedContent = '[Message chiffré - déchiffrement impossible]';
+            }
+        }
+
         // 🎵 Gestion spéciale pour les messages vocaux et audio
         let messageContent = '';
-        console.log('🎵 [RENDER_MSG] Vérification message ID:', msg.id, 'type:', msg.type, 'content:', msg.content);
+        console.log('🎵 [RENDER_MSG] Vérification message ID:', msg.id, 'type:', msg.type, 'content:', decryptedContent);
         console.log('🎵 [RENDER_MSG] Attachments:', msg.attachments);
 
         // Vérifier si c'est un message vocal (type voice/audio) OU si c'est un message avec attachment audio
@@ -1188,13 +1291,42 @@ class MessagingApp {
                 }
             }
 
+            // Chiffrer le contenu si E2E est disponible
+            let encryptedContent = content;
+            let encryptionData = null;
+
+            if (this.encryptionService && content) {
+                try {
+                    // Vérifier si on a déjà un secret partagé avec le destinataire
+                    const recipientId = this.currentConversation.id;
+                    if (!this.encryptionService.keys.has(recipientId)) {
+                        // Établir une connexion E2E avec le destinataire
+                        await this.establishE2EConnection(recipientId);
+                    }
+
+                    // Chiffrer le message
+                    const encrypted = await this.encryptionService.encryptMessage(content, recipientId);
+                    encryptedContent = JSON.stringify(encrypted);
+                    encryptionData = {
+                        is_encrypted: true,
+                        key_id: encrypted.keyId
+                    };
+                    console.log('🔒 Message chiffré pour envoi');
+                } catch (error) {
+                    console.warn('⚠️ Échec du chiffrement E2E, envoi en clair:', error);
+                    // Fallback: envoyer en clair
+                }
+            }
+
             // Envoyer le message
             const messageData = {
                 receiver_id: this.currentConversation.id,
-                content: content || 'Message vocal',
+                content: encryptedContent || 'Message vocal',
                 type: messageType,
                 reply_to: this.replyTo,
-                attachment_ids: attachmentIds
+                attachment_ids: attachmentIds,
+                is_encrypted: !!encryptionData?.is_encrypted,
+                key_id: encryptionData?.key_id
             };
 
             const response = await fetch('/api/messaging/send', {
@@ -1298,7 +1430,7 @@ class MessagingApp {
     /**
      * Ajouter un message à la conversation
      */
-    addMessageToConversation(message) {
+    async addMessageToConversation(message) {
         console.log('➕ Ajout du message à la conversation', this.currentConversation.id, message);
 
         if (!this.messages[this.currentConversation.id]) {
@@ -1308,7 +1440,7 @@ class MessagingApp {
         this.messages[this.currentConversation.id].push(message);
         console.log('📝 Nombre total de messages:', this.messages[this.currentConversation.id].length);
 
-        this.renderMessages();
+        await this.renderMessages();
     }
 
     /**
@@ -1515,7 +1647,31 @@ class MessagingApp {
     async deleteMessage(messageId) {
         if (!confirm('Supprimer ce message ?')) return;
 
+        // Trouver et supprimer immédiatement le message du DOM
+        const messageElement = document.querySelector(`.message-bubble[data-message-id="${messageId}"]`);
+        if (!messageElement) {
+            console.error('Message element not found for deletion:', messageId);
+            return;
+        }
+
+        // Sauvegarder le HTML du message pour pouvoir le restaurer en cas d'erreur
+        const messageBackup = messageElement.outerHTML;
+
+        // Supprimer immédiatement du DOM
+        messageElement.remove();
+        console.log('Message supprimé du DOM:', messageId);
+
+        // Supprimer aussi du cache local des messages
+        if (this.currentConversation && this.messages[this.currentConversation.id]) {
+            const messageIndex = this.messages[this.currentConversation.id].findIndex(m => m.id === messageId);
+            if (messageIndex !== -1) {
+                this.messages[this.currentConversation.id].splice(messageIndex, 1);
+                console.log('Message supprimé du cache local');
+            }
+        }
+
         try {
+            // Faire l'appel API en arrière-plan
             const response = await fetch(`/api/messaging/messages/${messageId}`, {
                 method: 'DELETE',
                 headers: {
@@ -1527,9 +1683,37 @@ class MessagingApp {
             if (!response.ok) throw new Error('Erreur de suppression');
 
             this.showNotification('Message supprimé', 'success');
+            console.log('Message supprimé du serveur avec succès');
 
         } catch (error) {
-            console.error('Erreur:', error);
+            console.error('Erreur lors de la suppression:', error);
+
+            // Restaurer le message en cas d'erreur
+            const messagesContainer = document.getElementById('messagesList');
+            if (messagesContainer && messageBackup) {
+                // Créer un élément temporaire et l'insérer
+                const tempDiv = document.createElement('div');
+                tempDiv.innerHTML = messageBackup;
+                const restoredMessage = tempDiv.firstElementChild;
+
+                // Trouver où l'insérer (approximativement à la bonne position)
+                const messages = messagesContainer.querySelectorAll('.message-bubble');
+                if (messages.length > 0) {
+                    messagesContainer.insertBefore(restoredMessage, messages[0]);
+                } else {
+                    messagesContainer.appendChild(restoredMessage);
+                }
+
+                console.log('Message restauré après erreur de suppression');
+            }
+
+            this.showNotification('Erreur lors de la suppression du message', 'error');
+
+            // Restaurer aussi dans le cache local
+            if (this.currentConversation && this.messages[this.currentConversation.id]) {
+                // Recharger les messages pour être sûr
+                await this.loadMessages(this.currentConversation.id);
+            }
         }
     }
 
@@ -1593,9 +1777,12 @@ class MessagingApp {
         console.log('✅ [WEBSOCKET] Echo disponible, configuration des écouteurs...');
 
         // Écouter les nouveaux messages
-        Echo.private(`user.${this.userId}`)
-            .listen('MessageSent', (e) => {
-                this.handleNewMessage(e.message);
+        const channel = Echo.private(`user.${this.userId}`);
+        console.log('🔌 [WEBSOCKET] Canal privé créé:', `user.${this.userId}`);
+
+        channel.listen('.message.sent', (e) => {
+                console.log('📨 [WEBSOCKET] Message event received:', e);
+                this.handleNewMessage(e);
             })
             .listen('MessageReactionChanged', (e) => {
                 this.handleReactionChanged(e);
@@ -1610,7 +1797,14 @@ class MessagingApp {
                 this.handleUserTyping(e);
             });
 
-        console.log('✅ [WEBSOCKET] Écouteurs privés configurés');
+        console.log('✅ [WEBSOCKET] Écouteurs privés configurés pour user.' + this.userId);
+
+        // Test de connexion
+        channel.subscribed(() => {
+            console.log('🔌 [WEBSOCKET] Connexion WebSocket établie avec succès pour user.' + this.userId);
+        }).error((error) => {
+            console.error('❌ [WEBSOCKET] Erreur de connexion WebSocket:', error);
+        });
 
         // Écouter les changements de statut
         console.log('🎯 [PRESENCE] Tentative de connexion au canal presence...');
@@ -1649,6 +1843,11 @@ class MessagingApp {
      * Gérer un nouveau message WebSocket
      */
     handleNewMessage(message) {
+        console.log('📨 [NEW_MESSAGE] Nouveau message reçu:', message);
+        console.log('📨 [NEW_MESSAGE] Current conversation:', this.currentConversation);
+        console.log('📨 [NEW_MESSAGE] User ID:', this.userId);
+        console.log('📨 [NEW_MESSAGE] Conversations loaded:', this.conversations.length);
+
         // Ajouter à la conversation si c'est la conversation active
         if (this.currentConversation &&
             (message.sender_id === this.currentConversation.id || message.receiver_id === this.currentConversation.id)) {
@@ -1663,39 +1862,154 @@ class MessagingApp {
 
         // Mettre à jour la conversation dans la liste (dernier message, compteur non lus)
         this.updateConversationInList(message);
+
+        // 🔔 Déclencher les notifications push et sons pour les nouveaux messages reçus
+        if (message.receiver_id === this.userId && message.sender_id !== this.userId) {
+            this.triggerMessageNotification(message);
+        }
+    }
+
+    /**
+     * Mettre à jour une conversation dans la liste en temps réel
+     */
+    updateConversationInList(message) {
+        // Déterminer l'ID de l'autre utilisateur dans la conversation
+        const otherUserId = message.sender_id === this.userId ? message.receiver_id : message.sender_id;
+        const isSentByMe = message.sender_id === this.userId;
+
+        console.log('🔄 [UPDATE_CONV] Updating conversation for user:', otherUserId, 'message:', message.id);
+
+        // Mettre à jour le tableau des conversations en mémoire
+        let conversation = this.conversations.find(c => c.user_id === otherUserId);
+        if (!conversation) {
+            console.log('🔄 [UPDATE_CONV] Conversation not found in memory, creating new one for user:', otherUserId);
+            // Créer une nouvelle conversation si elle n'existe pas
+            conversation = {
+                user_id: otherUserId,
+                user_name: message.sender_name || message.receiver_name || `User ${otherUserId}`,
+                user_avatar: null,
+                user_status: 'offline',
+                last_message: {
+                    content: message.content,
+                    created_at: message.created_at,
+                    is_sent_by_me: isSentByMe
+                },
+                unread_count: 0
+            };
+            this.conversations.unshift(conversation); // Ajouter au début
+            console.log('🔄 [UPDATE_CONV] New conversation created:', conversation);
+        } else {
+            // Mettre à jour les données de la conversation existante
+            conversation.last_message = {
+                content: message.content,
+                created_at: message.created_at,
+                is_sent_by_me: isSentByMe
+            };
+            console.log('🔄 [UPDATE_CONV] Existing conversation updated');
+        }
+
+        // Incrémenter le compteur non lus si nécessaire
+        if (message.receiver_id === this.userId && otherUserId !== this.currentConversation?.id) {
+            conversation.unread_count = (conversation.unread_count || 0) + 1;
+            console.log('🔄 [UPDATE_CONV] Unread count incremented to:', conversation.unread_count);
+        }
+
+        // Re-rendre la liste des conversations pour refléter les changements
+        this.renderConversations();
+        console.log('🔄 [UPDATE_CONV] Conversations re-rendered');
     }
 
     /**
      * Gérer changement de réaction
      */
-    handleReactionChanged(data) {
+    async handleReactionChanged(data) {
         // Rafraîchir le message
-        this.renderMessages();
+        await this.renderMessages();
+    }
+
+    /**
+     * Déclencher les notifications pour un nouveau message
+     */
+    triggerMessageNotification(message) {
+        try {
+            console.log('🔔 triggerMessageNotification appelée pour message:', message.id);
+
+            // Vérifier les permissions de notification
+            console.log('🔔 Permission Notification:', Notification.permission);
+            console.log('🔔 Notification supportée:', 'Notification' in window);
+
+            // Vérifier si la fenêtre est active
+            const isWindowActive = !document.hidden && document.hasFocus();
+
+            console.log('🔔 État de la fenêtre - hidden:', document.hidden, 'hasFocus:', document.hasFocus(), 'isWindowActive:', isWindowActive);
+            console.log('🔔 Nouveau message reçu:', {
+                sender: message.sender_name,
+                content: message.content?.substring(0, 50) + '...',
+                isWindowActive: isWindowActive
+            });
+
+            // Vérifier si pushNotificationManager existe
+            console.log('🔔 window.pushNotificationManager:', window.pushNotificationManager);
+            if (window.pushNotificationManager) {
+                console.log('🔔 pushNotificationManager.isEnabled:', window.pushNotificationManager.isEnabled);
+                console.log('🔔 pushNotificationManager.soundEnabled:', window.pushNotificationManager.soundEnabled);
+                console.log('🔔 pushNotificationManager.isGranted:', window.pushNotificationManager.isGranted);
+            }
+
+            // Si la fenêtre n'est pas active, déclencher les notifications
+            if (!isWindowActive) {
+                // Notification push du navigateur
+                if (window.pushNotificationManager && window.pushNotificationManager.isEnabled) {
+                    console.log('🔔 Déclenchement de la notification push...');
+                    const title = `Nouveau message de ${message.sender_name}`;
+                    const body = message.content || 'Message vocal';
+                    window.pushNotificationManager.showNotification(title, body);
+                    console.log('✅ Notification push déclenchée');
+                } else {
+                    console.log('❌ Notification push non déclenchée - manager non prêt ou désactivé');
+                }
+
+                // Son de notification
+                if (window.pushNotificationManager && window.pushNotificationManager.soundEnabled) {
+                    console.log('🔔 Déclenchement du son...');
+                    window.pushNotificationManager.playSound();
+                    console.log('✅ Son déclenché');
+                } else {
+                    console.log('❌ Son non déclenché - manager non prêt ou sons désactivés');
+                }
+
+                console.log('✅ Notification complète déclenchée pour le message');
+            } else {
+                console.log('ℹ️ Fenêtre active, pas de notification');
+            }
+        } catch (error) {
+            console.error('❌ Erreur lors du déclenchement de la notification:', error);
+        }
     }
 
     /**
      * Gérer message délivré
      */
-    handleMessageDelivered(data) {
+    async handleMessageDelivered(data) {
         // Mettre à jour le statut du message
         const messages = this.messages[this.currentConversation?.id] || [];
         const msg = messages.find(m => m.id === data.message_id);
         if (msg) {
             msg.is_delivered = true;
             msg.delivered_at = data.delivered_at;
-            this.renderMessages();
+            await this.renderMessages();
         }
     }
 
     /**
      * Gérer message supprimé
      */
-    handleMessageDeleted(data) {
+    async handleMessageDeleted(data) {
         // Supprimer le message de la liste
         if (this.messages[this.currentConversation?.id]) {
             this.messages[this.currentConversation.id] =
                 this.messages[this.currentConversation.id].filter(m => m.id !== data.message_id);
-            this.renderMessages();
+            await this.renderMessages();
         }
     }
 

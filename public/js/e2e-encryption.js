@@ -71,8 +71,43 @@ class E2EEncryptionService {
             });
 
             console.log('🔑 Paire de clés RSA générée pour l\'utilisateur actuel');
+
+            // Sauvegarder la clé publique sur le serveur
+            await this.savePublicKeyToServer();
         } catch (error) {
             console.error('❌ Erreur génération clés RSA:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Sauvegarder la clé publique sur le serveur
+     */
+    async savePublicKeyToServer() {
+        try {
+            const currentUserKeys = this.keys.get('currentUser');
+            if (!currentUserKeys || !currentUserKeys.publicKey) {
+                throw new Error('Clé publique non trouvée');
+            }
+
+            const response = await fetch('/api/profile/update-e2e-key', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${localStorage.getItem('auth_token')}`
+                },
+                body: JSON.stringify({
+                    e2e_public_key: currentUserKeys.publicKey
+                })
+            });
+
+            if (!response.ok) {
+                throw new Error('Erreur sauvegarde clé publique');
+            }
+
+            console.log('💾 Clé publique sauvegardée sur le serveur');
+        } catch (error) {
+            console.error('❌ Erreur sauvegarde clé publique:', error);
             throw error;
         }
     }

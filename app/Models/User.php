@@ -30,6 +30,9 @@ class User extends Authenticatable
         'password_changed',
         'role',
         'avatar',
+        'notifications_enabled',
+        'notification_sound',
+        'notification_sound_enabled',
         'phone',
         'status',
         'language',
@@ -58,6 +61,8 @@ class User extends Authenticatable
     protected $casts = [
         'email_verified_at' => 'datetime',
         'password' => 'hashed',
+        'notifications_enabled' => 'boolean',
+        'notification_sound_enabled' => 'boolean',
     ];
     public function organization()
     {

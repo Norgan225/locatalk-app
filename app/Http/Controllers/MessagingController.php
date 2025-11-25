@@ -268,6 +268,14 @@ class MessagingController extends Controller
         // Charger les relations
         $message->load(['sender:id,name,avatar', 'replyTo.sender:id,name', 'attachments']);
 
+        // Créer une notification pour le destinataire (si ce n'est pas un message auto-envoyé)
+        if ($user->id !== $receiverId) {
+            $receiver = User::find($receiverId);
+            if ($receiver && $receiver->notifications_enabled) {
+                $this->createMessageNotification($message, $receiver);
+            }
+        }
+
         // Broadcast en temps réel
         broadcast(new \App\Events\MessageSent($message))->toOthers();
 
@@ -979,7 +987,74 @@ private function optimizeAudioWithFFmpeg($file): ?array
 
         } catch (\Exception $e) {
             \Illuminate\Support\Facades\Log::warning('Erreur extraction durée média: ' . $e->getMessage());
-            return null;
+            return 0;
+        }
+    }
+
+    /**
+     * Créer une notification pour un nouveau message
+     */
+    private function createMessageNotification($message, $receiver)
+    {
+        try {
+            \App\Models\Notification::create([
+                'user_id' => $message->receiver_id,
+                'type' => 'message',
+                'title' => 'Nouveau message de ' . $message->sender->name,
+                'message' => $this->getNotificationMessage($message),
+                'data' => [
+                    'sender_id' => $message->sender_id,
+                    'sender_name' => $message->sender->name,
+                    'sender_avatar' => $message->sender->avatar,
+                    'message_id' => $message->id,
+                    'message_type' => $message->type,
+                    'channel_id' => $message->receiver_id, // Pour les messages directs, on utilise receiver_id comme channel
+                    'conversation_type' => 'direct',
+                    'notification_sound' => $receiver->notification_sound,
+                    'notification_sound_enabled' => $receiver->notification_sound_enabled,
+                ],
+                'is_read' => false,
+            ]);
+
+            \Illuminate\Support\Facades\Log::info('Notification créée pour le message', [
+                'message_id' => $message->id,
+                'receiver_id' => $message->receiver_id,
+                'sender_name' => $message->sender->name,
+            ]);
+        } catch (\Exception $e) {
+            \Illuminate\Support\Facades\Log::error('Erreur lors de la création de la notification', [
+                'message_id' => $message->id,
+                'error' => $e->getMessage(),
+            ]);
+        }
+    }
+
+    /**
+     * Générer le message de notification basé sur le type de message
+     */
+    private function getNotificationMessage($message): string
+    {
+        switch ($message->type) {
+            case 'voice':
+                return '📵 Message vocal';
+            case 'image':
+                return '🖼️ Image';
+            case 'video':
+                return '🎥 Vidéo';
+            case 'file':
+                return '📎 Fichier';
+            default:
+                // Pour les messages texte, afficher un aperçu
+                $content = $message->is_encrypted
+                    ? $message->decrypted_content
+                    : $message->content;
+
+                // Limiter la longueur du message dans la notification
+                if (strlen($content) > 100) {
+                    $content = substr($content, 0, 97) . '...';
+                }
+
+                return $content;
         }
     }
 }
