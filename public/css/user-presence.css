@@ -1,0 +1,243 @@
+/* ====================================
+   🎨 Styles pour le Système de Statut
+   ==================================== */
+
+/* Badge de statut */
+.status-badge {
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    margin-right: 6px;
+    border: 2px solid #fff;
+    box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.1);
+}
+
+/* Animation de pulsation pour "en ligne" */
+.status-badge.online {
+    animation: pulse 2s infinite;
+    /* couleur verte explicite pour les badges "online" */
+    background: #34d399;
+    box-shadow: 0 0 0 6px rgba(52,211,153,0.06);
+}
+
+/* Badge hors-ligne */
+.status-badge.offline {
+    background: #ef4444;
+    box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.1);
+}
+
+/* Alias pour compatibilité */
+.status-badge.status-offline {
+    background: #ef4444 !important;
+}
+
+.status-badge.status-online {
+    background: #34d399 !important;
+    animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+    0%, 100% {
+        opacity: 1;
+        transform: scale(1);
+    }
+    50% {
+        opacity: 0.8;
+        transform: scale(1.1);
+    }
+}
+
+/* Sélecteur de statut */
+.status-selector {
+    position: relative;
+    display: inline-block;
+}
+
+.current-status {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 16px;
+    background: #fff;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 14px;
+    color: #374151;
+    transition: all 0.2s;
+}
+
+.current-status:hover {
+    background: #f9fafb;
+    border-color: #d1d5db;
+}
+
+.current-status .chevron {
+    transition: transform 0.2s;
+}
+
+.current-status:hover .chevron {
+    transform: translateY(2px);
+}
+
+/* Dropdown du statut */
+.status-dropdown {
+    position: absolute;
+    top: calc(100% + 4px);
+    left: 0;
+    min-width: 200px;
+    background: #fff;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+    z-index: 1000;
+    padding: 8px 0;
+}
+
+.status-dropdown button {
+    display: flex;
+    align-items: center;
+    width: 100%;
+    padding: 10px 16px;
+    background: none;
+    border: none;
+    text-align: left;
+    cursor: pointer;
+    font-size: 14px;
+    color: #374151;
+    transition: background 0.2s;
+}
+
+.status-dropdown button:hover {
+    background: #f3f4f6;
+}
+
+.status-dropdown hr {
+    margin: 8px 0;
+    border: none;
+    border-top: 1px solid #e5e7eb;
+}
+
+/* Animation de mise à jour du statut */
+.status-updated {
+    animation: statusUpdate 0.3s ease-in-out;
+}
+
+@keyframes statusUpdate {
+    0%, 100% {
+        transform: scale(1);
+    }
+    50% {
+        transform: scale(1.05);
+    }
+}
+
+/* Widget utilisateurs en ligne */
+.online-users-widget {
+    background: #fff;
+    border-radius: 12px;
+    padding: 20px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.online-users-widget h3 {
+    margin: 0 0 16px 0;
+    font-size: 18px;
+    font-weight: 600;
+    color: #111827;
+}
+
+.users-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    max-height: 400px;
+    overflow-y: auto;
+}
+
+.user-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 8px;
+    border-radius: 8px;
+    transition: background 0.2s;
+}
+
+.user-item:hover {
+    background: #f9fafb;
+}
+
+.user-item .avatar {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    object-fit: cover;
+}
+
+.user-info {
+    flex: 1;
+}
+
+.user-name {
+    display: block;
+    font-size: 14px;
+    font-weight: 500;
+    color: #111827;
+    margin-bottom: 4px;
+}
+
+.status-container {
+    display: flex;
+    align-items: center;
+}
+
+.status-text {
+    font-size: 12px;
+    color: #6b7280;
+}
+
+.status-message {
+    font-size: 12px;
+    color: #9ca3af;
+    font-style: italic;
+    margin-top: 2px;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .online-users-widget {
+        padding: 16px;
+    }
+
+    .users-list {
+        max-height: 300px;
+    }
+
+    .user-item .avatar {
+        width: 36px;
+        height: 36px;
+    }
+}
+
+/* Badge inline dans les conversations */
+.message-author .status-badge {
+    width: 8px;
+    height: 8px;
+    margin-left: 4px;
+}
+
+/* Liste de contacts avec statut */
+.contact-list-item {
+    position: relative;
+}
+
+.contact-list-item .status-badge {
+    position: absolute;
+    bottom: 2px;
+    right: 2px;
+    width: 12px;
+    height: 12px;
+    border: 2px solid #fff;
+}

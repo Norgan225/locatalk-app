@@ -1,0 +1,395 @@
+/* ========================================
+   🎤 MESSAGES VOCAUX
+   ======================================== */
+
+/* Indicateur d'enregistrement */
+.recording-indicator {
+    background: linear-gradient(135deg, rgba(239, 68, 68, 0.2), rgba(220, 38, 38, 0.2));
+    border: 1px solid rgba(239, 68, 68, 0.3);
+    border-radius: 12px;
+    padding: 12px 16px;
+    margin-bottom: 12px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    animation: recordingPulseBackground 2s infinite;
+}
+
+@keyframes recordingPulseBackground {
+    0%, 100% {
+        background: linear-gradient(135deg, rgba(239, 68, 68, 0.2), rgba(220, 38, 38, 0.2));
+    }
+    50% {
+        background: linear-gradient(135deg, rgba(239, 68, 68, 0.3), rgba(220, 38, 38, 0.3));
+    }
+}
+
+.recording-pulse {
+    width: 12px;
+    height: 12px;
+    background: #ef4444;
+    border-radius: 50%;
+    animation: pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse {
+    0%, 100% {
+        transform: scale(1);
+        opacity: 1;
+    }
+    50% {
+        transform: scale(1.3);
+        opacity: 0.7;
+    }
+}
+
+.recording-text {
+    flex: 1;
+    color: white;
+    font-weight: 600;
+    font-size: 14px;
+}
+
+.recording-timer {
+    color: #ef4444;
+    font-weight: 700;
+    font-size: 16px;
+    font-family: 'Courier New', monospace;
+}
+
+.stop-recording-btn {
+    background: #ef4444;
+    color: white;
+    border: none;
+    padding: 8px 16px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-weight: 600;
+    font-size: 14px;
+    transition: all 0.2s ease;
+}
+
+.stop-recording-btn:hover {
+    background: #dc2626;
+    transform: scale(1.05);
+}
+
+/* Bouton vocal en mode enregistrement */
+#voiceRecordBtn.recording {
+    background: linear-gradient(135deg, #ef4444, #dc2626);
+    animation: recordingButtonPulse 1s infinite;
+}
+
+@keyframes recordingButtonPulse {
+    0%, 100% {
+        box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7);
+    }
+    50% {
+        box-shadow: 0 0 0 10px rgba(239, 68, 68, 0);
+    }
+}
+
+/* Aperçu audio */
+.audio-preview {
+    background: rgba(251, 187, 42, 0.1);
+    border: 1px solid rgba(251, 187, 42, 0.3);
+    border-radius: 12px;
+    padding: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.audio-preview-content {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.audio-icon {
+    font-size: 32px;
+}
+
+.audio-info {
+    flex: 1;
+}
+
+.audio-title {
+    color: white;
+    font-weight: 600;
+    font-size: 14px;
+    margin-bottom: 4px;
+}
+
+.audio-details {
+    color: rgba(255, 255, 255, 0.5);
+    font-size: 12px;
+}
+
+.audio-player {
+    width: 100%;
+    height: 32px;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 8px;
+}
+
+/* WhatsApp-style compact preview (inside input) */
+.whatsapp-preview,
+.whatsapp-recording {
+    background: rgba(255,255,255,0.06);
+    border-radius: 20px;
+    padding: 8px 10px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 8px;
+    color: white;
+}
+
+.whatsapp-preview .preview-delete,
+.whatsapp-recording .record-action {
+    background: transparent;
+    border: none;
+    color: rgba(255,255,255,0.9);
+    font-size: 18px;
+    cursor: pointer;
+}
+
+.whatsapp-preview .preview-play {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background: linear-gradient(135deg,#4ade80,#16a34a);
+    color: white;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    border:none;
+    cursor:pointer;
+}
+
+.whatsapp-preview .preview-range {
+    width:100%;
+    appearance: none;
+    -webkit-appearance: none;
+    background: transparent;
+}
+
+.whatsapp-preview .preview-range::-webkit-slider-runnable-track {
+    height: 6px;
+    background: rgba(255,255,255,0.12);
+    border-radius: 4px;
+}
+.whatsapp-preview .preview-range::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 12px;
+    height: 12px;
+    background: #2563eb;
+    border-radius: 50%;
+    margin-top: -3px;
+}
+
+.whatsapp-preview .preview-duration,
+.whatsapp-recording .recording-timer {
+    font-family: 'Courier New', monospace;
+    font-size: 13px;
+    color: rgba(255,255,255,0.9);
+    min-width: 44px;
+    text-align: right;
+}
+
+.audio-player::-webkit-media-controls-panel {
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 8px;
+}
+
+.audio-player::-webkit-media-controls-play-button,
+.audio-player::-webkit-media-controls-current-time-display,
+.audio-player::-webkit-media-controls-time-remaining-display {
+    filter: brightness(1.5);
+}
+
+/* Message vocal dans le chat */
+.message-voice {
+    background: rgba(251, 187, 42, 0.1);
+    border: 1px solid rgba(251, 187, 42, 0.2);
+    border-radius: 12px;
+    padding: 12px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-width: 250px;
+}
+
+.voice-play-btn {
+    width: 40px;
+    height: 40px;
+    background: linear-gradient(135deg, #fbbb2a, #df5526);
+    border: none;
+    border-radius: 50%;
+    color: white;
+    font-size: 18px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.voice-play-btn:hover {
+    transform: scale(1.1);
+    box-shadow: 0 4px 12px rgba(251, 187, 42, 0.4);
+}
+
+.voice-play-btn.playing {
+    background: linear-gradient(135deg, #ef4444, #dc2626);
+}
+
+.voice-waveform {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    height: 30px;
+}
+
+.voice-waveform-bar {
+    flex: 1;
+    background: rgba(251, 187, 42, 0.3);
+    border-radius: 2px;
+    transition: all 0.2s ease;
+}
+
+.voice-waveform-bar.active {
+    background: #fbbb2a;
+}
+
+.voice-duration {
+    color: rgba(255, 255, 255, 0.6);
+    font-size: 12px;
+    font-family: 'Courier New', monospace;
+    flex-shrink: 0;
+}
+
+/* Visualiseur de forme d'onde pendant l'enregistrement */
+.waveform-visualizer {
+    display: flex;
+    align-items: center;
+    gap: 3px;
+    height: 40px;
+    padding: 0 12px;
+}
+
+.waveform-bar {
+    width: 4px;
+    background: linear-gradient(to top, #fbbb2a, #df5526);
+    border-radius: 2px;
+    transition: height 0.05s ease-out, opacity 0.1s ease-out;
+    height: 8px;
+    opacity: 0.6;
+}
+
+/* Gros bouton stop clignotant (en bas de l'indicateur) */
+.blinking-stop {
+    animation: blinking 1s infinite;
+    box-shadow: 0 6px 20px rgba(239, 68, 68, 0.35);
+}
+
+@keyframes blinking {
+    0% { transform: scale(1); opacity: 1; }
+    50% { transform: scale(1.06); opacity: 0.85; }
+    100% { transform: scale(1); opacity: 1; }
+}
+
+/* Permission microphone */
+.mic-permission-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.8);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 10000;
+}
+
+.mic-permission-content {
+    background: rgba(30, 30, 46, 0.98);
+    backdrop-filter: blur(20px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 16px;
+    padding: 32px;
+    max-width: 400px;
+    text-align: center;
+}
+
+.mic-permission-icon {
+    font-size: 64px;
+    margin-bottom: 20px;
+}
+
+.mic-permission-content h3 {
+    color: white;
+    font-size: 24px;
+    margin-bottom: 12px;
+}
+
+.mic-permission-content p {
+    color: rgba(255, 255, 255, 0.7);
+    font-size: 14px;
+    line-height: 1.6;
+    margin-bottom: 24px;
+}
+
+.mic-permission-actions {
+    display: flex;
+    gap: 12px;
+    justify-content: center;
+}
+
+.mic-permission-btn {
+    padding: 12px 24px;
+    border-radius: 12px;
+    border: none;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.mic-permission-btn.primary {
+    background: linear-gradient(135deg, #fbbb2a, #df5526);
+    color: white;
+}
+
+.mic-permission-btn.primary:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(251, 187, 42, 0.4);
+}
+
+.mic-permission-btn.secondary {
+    background: rgba(255, 255, 255, 0.1);
+    color: white;
+}
+
+.mic-permission-btn.secondary:hover {
+    background: rgba(255, 255, 255, 0.15);
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .recording-indicator {
+        flex-wrap: wrap;
+    }
+
+    .stop-recording-btn {
+        width: 100%;
+        margin-top: 8px;
+    }
+
+    .message-voice {
+        min-width: 200px;
+    }
+}
